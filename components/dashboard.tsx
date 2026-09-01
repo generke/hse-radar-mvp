@@ -8,7 +8,7 @@ type Row = Record<string, string | number | null | undefined> & { id: string; or
 type Data = { employees: Row[]; inventory: Row[]; ppe: Row[]; documents: Row[] };
 type Kind = "employees" | "inventory" | "ppe" | "documents";
 type Tab = "overview" | Kind | "billing";
-type Props = { demo?: boolean; userEmail?: string; organizationId?: string; organizationName?: string; role?: string; plan?: string; initialData?: Data; configurationError?: string };
+type Props = { demo?: boolean; supabaseUrl?: string; supabaseKey?: string; userEmail?: string; organizationId?: string; organizationName?: string; role?: string; plan?: string; initialData?: Data; configurationError?: string };
 
 const nav: { id: Tab; label: string; icon: string }[] = [
   { id: "overview", label: "Оперативный центр", icon: "⌁" }, { id: "employees", label: "Работники", icon: "◯" },
@@ -31,7 +31,7 @@ function employeeStatus(e: Row) { const values = [e.medical_exam_expiry, e.brief
 function formatDate(value: unknown) { if (!value) return "—"; return new Intl.DateTimeFormat("ru-RU").format(new Date(`${String(value).slice(0,10)}T00:00:00`)) }
 function Status({ value }: { value: string }) { const label = value === "red" ? "Недопуск" : value === "yellow" ? "Скоро срок" : "В норме"; return <span className={`status ${value}`}>{label}</span> }
 
-export function Dashboard({ demo = false, userEmail = "developer@hseradar.kz", organizationId, organizationName = "HSE Radar Demo", role = "owner", plan = "trial", initialData, configurationError }: Props) {
+export function Dashboard({ demo = false, supabaseUrl = "", supabaseKey = "", userEmail = "developer@hseradar.kz", organizationId, organizationName = "HSE Radar Demo", role = "owner", plan = "trial", initialData, configurationError }: Props) {
   const [tab, setTab] = useState<Tab>("overview"); const [data, setData] = useState<Data>(initialData || seed); const [menu, setMenu] = useState(false);
   const [editor, setEditor] = useState<{ kind: Kind; item?: Row } | null>(null); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(configurationError || "");
   useEffect(() => { if (!demo) return; const saved = localStorage.getItem("hse-radar-next-demo"); if (saved) queueMicrotask(() => { try { setData(JSON.parse(saved)) } catch {} }); }, [demo]);
@@ -39,14 +39,14 @@ export function Dashboard({ demo = false, userEmail = "developer@hseradar.kz", o
   const risks = useMemo(() => data.employees.flatMap(e => [{ id:`${e.id}-m`, date:e.medical_exam_expiry, title:e.full_name, detail:"Медосмотр" }, { id:`${e.id}-b`, date:e.briefing_expiry, title:e.full_name, detail:"Инструктаж" }, { id:`${e.id}-t`, date:e.training_expiry, title:e.full_name, detail:"Обучение" }]).filter(x => urgency(x.date) !== "green").sort((a,b) => String(a.date).localeCompare(String(b.date))), [data.employees]);
   async function persist(kind: Kind, row: Row, update = false) {
     if (demo) { setData(d => ({ ...d, [kind]: update ? d[kind].map(x => x.id === row.id ? row : x) : [...d[kind], row] })); return }
-    const supabase = createClient(); const table = kind === "ppe" ? "ppe_issues" : kind;
+    const supabase = createClient(supabaseUrl, supabaseKey); const table = kind === "ppe" ? "ppe_issues" : kind;
     const result = update ? await supabase.from(table).update(row).eq("id", row.id).select().single() : await supabase.from(table).insert({ ...row, organization_id: organizationId }).select().single();
     if (result.error) throw result.error; const saved = result.data as Row; setData(d => ({ ...d, [kind]: update ? d[kind].map(x => x.id === row.id ? saved : x) : [...d[kind], saved] }));
   }
-  async function remove(kind: Kind, id: string) { if (!confirm("Удалить запись без возможности восстановления?")) return; if (!demo) { const table = kind === "ppe" ? "ppe_issues" : kind; const { error } = await createClient().from(table).delete().eq("id", id); if (error) return setNotice(error.message) } setData(d => ({ ...d, [kind]: d[kind].filter(x => x.id !== id) })); }
+  async function remove(kind: Kind, id: string) { if (!confirm("Удалить запись без возможности восстановления?")) return; if (!demo) { const table = kind === "ppe" ? "ppe_issues" : kind; const { error } = await createClient(supabaseUrl, supabaseKey).from(table).delete().eq("id", id); if (error) return setNotice(error.message) } setData(d => ({ ...d, [kind]: d[kind].filter(x => x.id !== id) })); }
   async function saveEditor(e: FormEvent<HTMLFormElement>) { e.preventDefault(); if (!editor) return; setBusy(true); setNotice(""); try { const v = Object.fromEntries(new FormData(e.currentTarget)); const old: Row = editor.item || { id: "" }; const row: Row = { ...old, ...v, id: old.id || crypto.randomUUID() }; if (editor.kind === "ppe") row.quantity = Number(row.quantity); await persist(editor.kind, row, Boolean(editor.item)); setEditor(null) } catch (err) { setNotice(err instanceof Error ? err.message : "Не удалось сохранить") } finally { setBusy(false) } }
-  async function upload(e: ChangeEvent<HTMLInputElement>) { const file = e.target.files?.[0]; if (!file) return; if (demo) return persist("documents", { id:crypto.randomUUID(), name:file.name, category:"Загруженный документ", storage_path:"demo", created_at:new Date().toISOString() }); setBusy(true); try { const path = `${organizationId}/${crypto.randomUUID()}-${file.name}`; const supabase = createClient(); const uploaded = await supabase.storage.from("hse-documents").upload(path, file); if (uploaded.error) throw uploaded.error; await persist("documents", { id:crypto.randomUUID(), name:file.name, category:"Загруженный документ", storage_path:path, created_at:new Date().toISOString() }) } catch(err) { setNotice(err instanceof Error ? err.message : "Ошибка загрузки") } finally { setBusy(false); e.target.value="" } }
-  async function logout() { if (demo) return location.reload(); await createClient().auth.signOut(); location.reload() }
+  async function upload(e: ChangeEvent<HTMLInputElement>) { const file = e.target.files?.[0]; if (!file) return; if (demo) return persist("documents", { id:crypto.randomUUID(), name:file.name, category:"Загруженный документ", storage_path:"demo", created_at:new Date().toISOString() }); setBusy(true); try { const path = `${organizationId}/${crypto.randomUUID()}-${file.name}`; const supabase = createClient(supabaseUrl, supabaseKey); const uploaded = await supabase.storage.from("hse-documents").upload(path, file); if (uploaded.error) throw uploaded.error; await persist("documents", { id:crypto.randomUUID(), name:file.name, category:"Загруженный документ", storage_path:path, created_at:new Date().toISOString() }) } catch(err) { setNotice(err instanceof Error ? err.message : "Ошибка загрузки") } finally { setBusy(false); e.target.value="" } }
+  async function logout() { if (demo) return location.reload(); await createClient(supabaseUrl, supabaseKey).auth.signOut(); location.reload() }
   async function checkout() { setBusy(true); const res = await fetch("/api/stripe/checkout", { method:"POST" }); const body = await res.json(); setBusy(false); if (!res.ok) return setNotice(body.error || "Оплата не настроена"); location.href = body.url }
   const red = risks.filter(x => urgency(x.date) === "red").length, yellow = risks.filter(x => urgency(x.date) === "yellow").length;
   return <div className="app-shell">
