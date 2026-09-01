@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { RadarLogo } from "./logo";
 
-export function AuthScreen() {
+export function AuthScreen({ supabaseUrl = "", supabaseKey = "" }: { supabaseUrl?: string; supabaseKey?: string } = {}) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -12,7 +12,7 @@ export function AuthScreen() {
     e.preventDefault(); setBusy(true); setError("");
     const form = new FormData(e.currentTarget);
     const email = String(form.get("email")); const password = String(form.get("password"));
-    const supabase = createClient();
+    const supabase = createClient(supabaseUrl, supabaseKey);
     const result = mode === "login"
       ? await supabase.auth.signInWithPassword({ email, password })
       : await supabase.auth.signUp({ email, password, options: { data: { full_name: String(form.get("name") || "") } } });
