@@ -112,3 +112,5 @@ create policy "org files insert" on storage.objects for insert with check (bucke
 drop policy if exists "org files delete" on storage.objects;
 create policy "org files delete" on storage.objects for delete using (bucket_id='hse-documents' and public.can_manage_org((storage.foldername(name))[1]::uuid));
 
+-- Apply the billing, trial-limit and platform-admin extension after this base schema.
+-- Source: supabase/migrations/20260901_kaspi_trial_admin.sql
