@@ -95,7 +95,7 @@ declare
   current_count integer;
 begin
   select plan into current_plan from public.organizations where id=new.organization_id;
-  if current_plan='trial' then
+  if current_plan='trial' and not public.is_platform_admin() then
     execute format('select count(*) from public.%I where organization_id=$1', tg_table_name)
       into current_count using new.organization_id;
     if current_count >= 5 then
@@ -154,4 +154,3 @@ revoke all on function public.approve_payment_request(uuid) from public;
 revoke all on function public.reject_payment_request(uuid) from public;
 grant execute on function public.approve_payment_request(uuid) to authenticated;
 grant execute on function public.reject_payment_request(uuid) to authenticated;
-
