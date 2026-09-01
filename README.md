@@ -26,6 +26,22 @@ npm run dev
 
 События: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
 
+## Kaspi Pay и пробный тариф
+
+Примените `supabase/migrations/20260901_kaspi_trial_admin.sql`, затем добавьте в Vercel официальную ссылку удалённой оплаты как `NEXT_PUBLIC_KASPI_PAY_URL`.
+
+Trial ограничен пятью работниками, пятью выдачами СИЗ, пятью документами и пятью единицами инвентаря. Ограничение работает в интерфейсе и на уровне Supabase trigger.
+
+Kaspi Pay активируется с ручной проверкой: клиент оплачивает по ссылке, отправляет заявку, platform admin сверяет платёж в Kaspi Pay и подтверждает заявку. После подтверждения организация получает `plan=pro` и лимиты снимаются.
+
+Platform admin назначается только вручную после регистрации пользователя:
+
+```sql
+insert into public.platform_admins(user_id)
+select id from auth.users where email='ADMIN_EMAIL'
+on conflict (user_id) do nothing;
+```
+
 ## Vercel
 
 Импортируйте GitHub-репозиторий в Vercel, добавьте переменные из `.env.example` для Production и Preview, затем выполните deploy.
