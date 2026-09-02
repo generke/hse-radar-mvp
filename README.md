@@ -14,7 +14,7 @@ npm run dev
 ## Supabase
 
 1. Создайте проект Supabase.
-2. Выполните `supabase/schema.sql` в SQL Editor.
+2. Выполните `supabase/schema.sql`, затем миграции из `supabase/migrations/` по имени файла.
 3. Скопируйте `.env.example` в `.env.local` и добавьте Project URL и Publishable key.
 4. Для Stripe webhook добавьте Service role key только в серверные переменные окружения.
 
@@ -24,7 +24,7 @@ npm run dev
 
 `https://ВАШ-ДОМЕН/api/stripe/webhook`
 
-События: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
+События: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`.
 
 ## Kaspi Pay и пробный тариф
 
@@ -47,3 +47,12 @@ on conflict (user_id) do nothing;
 Импортируйте GitHub-репозиторий в Vercel, добавьте переменные из `.env.example` для Production и Preview, затем выполните deploy.
 
 Никогда не публикуйте `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY` или `STRIPE_WEBHOOK_SECRET` в Git.
+
+## Производственная проверка
+
+- `npm run verify` проверяет ESLint и production build.
+- `/api/health` используется для внешнего uptime-monitoring.
+- Записи не удаляются из интерфейса: они архивируются, а изменения попадают в `audit_events`.
+- Документы находятся в приватном bucket и открываются по краткоживущей signed URL.
+- Stripe webhook сохраняет идентификаторы событий и безопасно повторяет незавершённую обработку.
+- Supabase Database Backups не включают Storage objects: настройте отдельное резервное копирование bucket `hse-documents`.
