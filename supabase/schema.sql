@@ -4,8 +4,8 @@ create extension if not exists pgcrypto;
 create table if not exists public.organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  plan text not null default 'trial' check (plan in ('trial','pro','enterprise')),
-  subscription_status text not null default 'trialing',
+  plan text not null default 'free' check (plan in ('free','pro','enterprise')),
+  subscription_status text not null default 'free',
   stripe_customer_id text,
   created_at timestamptz not null default now()
 );

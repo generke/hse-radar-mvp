@@ -25,7 +25,7 @@ export async function POST(request: Request) {
         ? ((object as Stripe.Checkout.Session).payment_status === "paid" || (object as Stripe.Checkout.Session).payment_status === "no_payment_required" ? "active" : "incomplete")
         : (object as Stripe.Subscription).status;
       const active = ["active","trialing"].includes(subscriptionStatus);
-      const updated = await supabase.from("organizations").update({ plan:active?"pro":"trial", subscription_status:subscriptionStatus, stripe_customer_id:customerId }).eq("id",organizationId);
+      const updated = await supabase.from("organizations").update({ plan:active?"pro":"free", subscription_status:subscriptionStatus, stripe_customer_id:customerId }).eq("id",organizationId);
       if (updated.error) return NextResponse.json({ error:"Unable to update subscription" }, { status:500 });
       await supabase.from("billing_events").insert({ organization_id:organizationId, provider:"stripe", external_id:event.id, event_type:event.type, payload:event.data.object });
     }
