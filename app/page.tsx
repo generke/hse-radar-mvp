@@ -1,7 +1,7 @@
 import { AuthScreen } from "@/components/auth-screen";
 import { Dashboard } from "@/components/dashboard";
 import type { AuditEvent, TaskItem, TeamMember } from "@/components/product-panels";
-import type { LearningAttempt, LearningCourse, VisionCamera, VisionEvent } from "@/components/module-panels";
+import type { LearningAssignment, LearningAttempt, LearningCourse, VisionCamera, VisionEvent } from "@/components/module-panels";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export default async function Home({searchParams}:{searchParams:Promise<{org?:st
   if(!selected)return <Dashboard demo userEmail={user.email} configurationError="Профиль создан, но рабочее пространство не найдено. Обратитесь к администратору."/>;
   const membership=memberships.find(item=>item.organization_id===selected.id);
   const role=isPlatformAdmin?"platform_admin":membership?.role||"member";
-  const [employees,inventory,ppe,documents,tasks,members,audit,paymentRequests,adminOrganizations,courses,questions,attempts,cameras,visionEvents]=await Promise.all([
+  const [employees,inventory,ppe,documents,tasks,members,audit,paymentRequests,adminOrganizations,courses,questions,attempts,assignments,cameras,visionEvents]=await Promise.all([
     supabase.from("employees").select("*").eq("organization_id",selected.id).is("archived_at",null).order("full_name"),
     supabase.from("inventory").select("*").eq("organization_id",selected.id).is("archived_at",null).order("name"),
     supabase.from("ppe_issues").select("*").eq("organization_id",selected.id).is("archived_at",null).order("replacement_date"),
@@ -47,8 +47,9 @@ export default async function Home({searchParams}:{searchParams:Promise<{org?:st
     supabase.from("learning_courses").select("id,title,course_type,description,passing_score,is_active,created_at").eq("organization_id",selected.id).order("created_at",{ascending:false}),
     supabase.from("learning_questions").select("course_id").eq("organization_id",selected.id),
     supabase.from("learning_attempts").select("id,course_id,score,passed,completed_at").eq("organization_id",selected.id).order("completed_at",{ascending:false}).limit(30),
-    supabase.from("vision_cameras").select("id,name,location,status,zone_points,created_at").eq("organization_id",selected.id).order("created_at",{ascending:false}),
-    supabase.from("vision_events").select("id,camera_id,event_type,status,confidence,occurred_at").eq("organization_id",selected.id).order("occurred_at",{ascending:false}).limit(50),
+    supabase.from("learning_assignments").select("id,course_id,employee_id,due_date,status,score,completed_at,employees(full_name,department),learning_courses(title,course_type)").eq("organization_id",selected.id).order("due_date"),
+    supabase.from("vision_cameras").select("id,name,location,stream_url,status,zone_points,created_at").eq("organization_id",selected.id).order("created_at",{ascending:false}),
+    supabase.from("vision_events").select("id,camera_id,event_type,status,confidence,notes,task_id,occurred_at").eq("organization_id",selected.id).order("occurred_at",{ascending:false}).limit(50),
   ]);
   const memberRows=(members.data||[]) as TeamMember[];
   const userIds=memberRows.map(item=>item.user_id);
@@ -57,13 +58,14 @@ export default async function Home({searchParams}:{searchParams:Promise<{org?:st
   const team=memberRows.map(item=>({...item,full_name:names.get(item.user_id)||null}));
   const questionCounts=new Map<string,number>();for(const question of questions.data||[])questionCounts.set(question.course_id,(questionCounts.get(question.course_id)||0)+1);
   const learningCourses=(courses.data||[]).map(course=>({...course,question_count:questionCounts.get(course.id)||0})) as LearningCourse[];
+  const learningAssignments=(assignments.data||[]).map(item=>{const employee=related(item.employees);const course=related(item.learning_courses);return{id:item.id,course_id:item.course_id,employee_id:item.employee_id,due_date:item.due_date,status:item.status,score:item.score,completed_at:item.completed_at,employee_name:employee?.full_name,department:employee?.department,course_title:course?.title,course_type:course?.course_type}}) as LearningAssignment[];
   return <Dashboard supabaseUrl={supabaseUrl} supabaseKey={supabaseKey} userEmail={user.email}
     organizationId={selected.id} organizationName={selected.name} role={role} plan={selected.plan}
     isPlatformAdmin={isPlatformAdmin} workspaces={workspaces}
     kaspiPayUrl={process.env.NEXT_PUBLIC_KASPI_PAY_URL||""}
     paymentRequests={paymentRequests.data||[]} adminOrganizations={adminOrganizations.data||[]}
     tasks={(tasks.data||[]) as TaskItem[]} members={team} auditEvents={(audit.data||[]) as AuditEvent[]}
-    learningCourses={learningCourses} learningAttempts={(attempts.data||[]) as LearningAttempt[]}
+    learningCourses={learningCourses} learningAttempts={(attempts.data||[]) as LearningAttempt[]} learningAssignments={learningAssignments}
     visionCameras={(cameras.data||[]) as VisionCamera[]} visionEvents={(visionEvents.data||[]) as VisionEvent[]}
     initialData={{employees:employees.data||[],inventory:inventory.data||[],ppe:ppe.data||[],documents:documents.data||[]}}/>;
 }

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { RadarLogo } from "./logo";
 import { AuditPanel, TasksPanel, TeamPanel, taskDeadlineLabel, taskDeadlineTone, type AuditEvent, type TaskItem, type TeamMember } from "./product-panels";
-import { LearningPanel, SafetyVisionPanel, type LearningAttempt, type LearningCourse, type VisionCamera, type VisionEvent } from "./module-panels";
+import { LearningPanel, SafetyVisionPanel, type LearningAssignment, type LearningAttempt, type LearningCourse, type VisionCamera, type VisionEvent } from "./module-panels";
 
 type Row = Record<string, string | number | null | undefined> & { id: string; organization_id?: string };
 type Data = { employees: Row[]; inventory: Row[]; ppe: Row[]; documents: Row[] };
@@ -14,7 +14,7 @@ type Tab = "overview" | Kind | "tasks" | "learning" | "vision" | "team" | "audit
 type PaymentRequest = { id: string; organization_id: string; payment_reference?: string | null; status: string; created_at: string; organizations?: { name?: string; plan?: string; subscription_status?: string } | { name?: string; plan?: string; subscription_status?: string }[] | null };
 type AdminOrganization = { id: string; name: string; plan: string; subscription_status: string; created_at: string };
 type Workspace = { id:string; name:string; role:string; plan:string; subscription_status:string };
-type Props = { demo?: boolean; supabaseUrl?: string; supabaseKey?: string; userEmail?: string; organizationId?: string; organizationName?: string; role?: string; plan?: string; initialData?: Data; configurationError?: string; isPlatformAdmin?: boolean; kaspiPayUrl?: string; paymentRequests?: PaymentRequest[]; adminOrganizations?: AdminOrganization[]; workspaces?:Workspace[]; tasks?:TaskItem[]; members?:TeamMember[]; auditEvents?:AuditEvent[]; learningCourses?:LearningCourse[]; learningAttempts?:LearningAttempt[]; visionCameras?:VisionCamera[]; visionEvents?:VisionEvent[] };
+type Props = { demo?: boolean; supabaseUrl?: string; supabaseKey?: string; userEmail?: string; organizationId?: string; organizationName?: string; role?: string; plan?: string; initialData?: Data; configurationError?: string; isPlatformAdmin?: boolean; kaspiPayUrl?: string; paymentRequests?: PaymentRequest[]; adminOrganizations?: AdminOrganization[]; workspaces?:Workspace[]; tasks?:TaskItem[]; members?:TeamMember[]; auditEvents?:AuditEvent[]; learningCourses?:LearningCourse[]; learningAttempts?:LearningAttempt[]; learningAssignments?:LearningAssignment[]; visionCameras?:VisionCamera[]; visionEvents?:VisionEvent[] };
 
 const nav: { id: Tab; label: string; icon: string }[] = [
   { id: "overview", label: "Оперативный центр", icon: "⌁" }, { id: "employees", label: "Работники", icon: "◯" },
@@ -41,7 +41,7 @@ function formatDate(value: unknown) { if (!value) return "—"; return new Intl.
 function Status({ value }: { value: string }) { const label = value === "red" ? "Недопуск" : value === "yellow" ? "Скоро срок" : "В норме"; return <span className={`status ${value}`}>{label}</span> }
 function PaymentStatus({ value }: { value: string }) { const tone=value==='approved'?'green':value==='pending'?'yellow':'red'; const label=value==='approved'?'Подтверждён':value==='pending'?'На проверке':'Отклонён'; return <span className={`status ${tone}`}>{label}</span> }
 
-export function Dashboard({ demo = false, supabaseUrl = "", supabaseKey = "", userEmail = "developer@hseradar.kz", organizationId, organizationName = "HSE Radar Demo", role = "owner", plan = "free", initialData, configurationError, isPlatformAdmin = false, kaspiPayUrl = "", paymentRequests = [], adminOrganizations = [], workspaces=[], tasks=[], members=[], auditEvents=[], learningCourses=[], learningAttempts=[], visionCameras=[], visionEvents=[] }: Props) {
+export function Dashboard({ demo = false, supabaseUrl = "", supabaseKey = "", userEmail = "developer@hseradar.kz", organizationId, organizationName = "HSE Radar Demo", role = "owner", plan = "free", initialData, configurationError, isPlatformAdmin = false, kaspiPayUrl = "", paymentRequests = [], adminOrganizations = [], workspaces=[], tasks=[], members=[], auditEvents=[], learningCourses=[], learningAttempts=[], learningAssignments=[], visionCameras=[], visionEvents=[] }: Props) {
   const router=useRouter();
   const [tab, setTab] = useState<Tab>("overview"); const [data, setData] = useState<Data>(initialData || seed); const [menu, setMenu] = useState(false);
   const [editor, setEditor] = useState<{ kind: Kind; item?: Row } | null>(null); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(configurationError || ""); const [paymentReference, setPaymentReference] = useState("");
@@ -79,7 +79,7 @@ export function Dashboard({ demo = false, supabaseUrl = "", supabaseKey = "", us
       {tab === "ppe" && <ListPage title="Средства индивидуальной защиты" eyebrow="ВЫДАЧА И ЗАМЕНА" addLabel="Выдать СИЗ" onAdd={() => openEditor("ppe")}><PpeTable rows={data.ppe} edit={item => openEditor("ppe",item)} remove={id => remove("ppe",id)} /></ListPage>}
       {tab === "documents" && <ListPage title="Документы" eyebrow="ЕДИНОЕ ХРАНИЛИЩЕ" addLabel=""><label className="upload button primary">{busy ? "Загрузка…" : "+ Загрузить документ"}<input type="file" onChange={upload} disabled={busy} /></label><Documents rows={data.documents} remove={id => remove("documents",id)} /></ListPage>}
       {tab === "tasks" && organizationId && <TasksPanel initial={tasks} members={members} organizationId={organizationId} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey}/>}
-      {tab === "learning" && organizationId && <LearningPanel organizationId={organizationId} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey} initialCourses={learningCourses} initialAttempts={learningAttempts}/>}
+      {tab === "learning" && organizationId && <LearningPanel organizationId={organizationId} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey} initialCourses={learningCourses} initialAttempts={learningAttempts} initialAssignments={learningAssignments} employees={data.employees.map(item=>({id:item.id,full_name:String(item.full_name||""),department:item.department?String(item.department):null}))}/>}
       {tab === "vision" && organizationId && <SafetyVisionPanel organizationId={organizationId} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey} initialCameras={visionCameras} initialEvents={visionEvents}/>}
       {tab === "team" && organizationId && <TeamPanel initial={members} organizationId={organizationId} canAdmin={isPlatformAdmin||role==="owner"}/>}
       {tab === "audit" && <AuditPanel events={auditEvents} members={members}/>}
