@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizePermissions } from "@/lib/access";
 
 const roles = new Set(["owner", "hse", "manager", "hr", "member"]);
 const sameOrigin=(request:NextRequest)=>!request.headers.get("origin")||request.headers.get("origin")===request.nextUrl.origin;
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
     const organizationId = String(body.organizationId || "");
     const email = String(body.email || "").trim().toLowerCase();
     const role = String(body.role || "member");
+    const sectionPermissions = normalizePermissions(role,body.sectionPermissions);
     if (!organizationId || !/^\S+@\S+\.\S+$/.test(email) || !roles.has(role)) return NextResponse.json({ error: "Проверьте email и роль." }, { status: 400 });
     const auth = await authorize(organizationId); if (auth.error) return auth.error;
     const admin = createAdminClient();
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
       invited = true;
     }
     if (!target) throw new Error("Не удалось создать приглашение.");
-    const { error } = await admin.from("memberships").upsert({ organization_id: organizationId, user_id: target.id, role }, { onConflict: "organization_id,user_id" });
+    const { error } = await admin.from("memberships").upsert({ organization_id: organizationId, user_id: target.id, role, section_permissions:sectionPermissions }, { onConflict: "organization_id,user_id" });
     if (error) throw error;
     return NextResponse.json({ ok: true, invited });
   } catch (error) {
@@ -54,10 +56,11 @@ export async function PATCH(request: NextRequest) {
     const organizationId = String(body.organizationId || "");
     const userId = String(body.userId || "");
     const role = String(body.role || "");
+    const sectionPermissions = normalizePermissions(role,body.sectionPermissions);
     if (!organizationId || !userId || !roles.has(role)) return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
     const auth = await authorize(organizationId); if (auth.error) return auth.error;
     const admin = createAdminClient();
-    const { error } = await admin.from("memberships").update({ role }).eq("organization_id", organizationId).eq("user_id", userId);
+    const { error } = await admin.from("memberships").update({ role, section_permissions:sectionPermissions }).eq("organization_id", organizationId).eq("user_id", userId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (error) {
