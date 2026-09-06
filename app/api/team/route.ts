@@ -11,10 +11,10 @@ async function authorize(organizationId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "Требуется авторизация." }, { status: 401 }) };
   const [{ data: membership }, { data: platformAdmin }] = await Promise.all([
-    supabase.from("memberships").select("role").eq("organization_id", organizationId).eq("user_id", user.id).maybeSingle(),
+    supabase.from("memberships").select("role,is_active").eq("organization_id", organizationId).eq("user_id", user.id).maybeSingle(),
     supabase.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle(),
   ]);
-  if (membership?.role !== "owner" && !platformAdmin) return { error: NextResponse.json({ error: "Только владелец может управлять командой." }, { status: 403 }) };
+  if ((membership?.role !== "owner" || membership.is_active===false) && !platformAdmin) return { error: NextResponse.json({ error: "Только активный владелец может управлять командой." }, { status: 403 }) };
   return { user };
 }
 
@@ -33,17 +33,23 @@ export async function POST(request: NextRequest) {
     if (listError) throw listError;
     let target = users.users.find(item => item.email?.toLowerCase() === email);
     let invited = false;
+    let inviteUrl: string | null = null;
     if (!target) {
       const site = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
       const result = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: site, data: { full_name: email.split("@")[0] } });
-      if (result.error) throw result.error;
-      target = result.data.user;
+      if (result.error) {
+        const fallback = await admin.auth.admin.generateLink({ type:"invite", email, options:{ redirectTo:site, data:{ full_name:email.split("@")[0] } } });
+        if(fallback.error)throw new Error(`${result.error.message}. ${fallback.error.message}`);
+        target=fallback.data.user;inviteUrl=fallback.data.properties.action_link;
+      } else target = result.data.user;
       invited = true;
     }
     if (!target) throw new Error("Не удалось создать приглашение.");
-    const { error } = await admin.from("memberships").upsert({ organization_id: organizationId, user_id: target.id, role, section_permissions:sectionPermissions }, { onConflict: "organization_id,user_id" });
+    const { error } = await admin.from("memberships").upsert({ organization_id: organizationId, user_id: target.id, role, section_permissions:sectionPermissions, is_active:true }, { onConflict: "organization_id,user_id" });
     if (error) throw error;
-    return NextResponse.json({ ok: true, invited });
+    const fullName=String(target.user_metadata?.full_name||email.split("@")[0]);
+    await admin.from("profiles").upsert({id:target.id,full_name:fullName,email},{onConflict:"id"});
+    return NextResponse.json({ ok: true, invited, inviteUrl, member:{user_id:target.id,role,section_permissions:sectionPermissions,is_active:true,created_at:new Date().toISOString(),full_name:fullName,email} });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Не удалось пригласить пользователя." }, { status: 500 });
   }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { LanguageProvider, LanguageSwitcher } from "@/components/language-provider";
+import { LanguageProvider } from "@/components/language-provider";
 
 export const metadata: Metadata = {
   title: "HSE Radar — Оперативный центр",
@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ru"><body><LanguageProvider><div className="global-language"><LanguageSwitcher/></div>{children}</LanguageProvider></body></html>;
+  return <html lang="ru"><body><LanguageProvider>{children}</LanguageProvider></body></html>;
 }
