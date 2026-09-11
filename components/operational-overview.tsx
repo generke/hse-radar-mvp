@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import { taskDeadlineLabel, taskDeadlineTone, type TaskItem } from "./product-panels";
 import type { LearningAssignment, VisionEvent } from "./module-panels";
+import { RiskCalendar } from "./risk-calendar";
 
 type Risk = { id: string; date: string | number | null | undefined; title: string | number | null | undefined; detail: string };
-type QueueItem = { id: string; title: string; detail: string; date?: string | null; tone: "red" | "yellow" | "green"; module: "employees" | "tasks" | "learning" | "vision"; kind: string };
+type QueueItem = { id: string; title: string; detail: string; date?: string | null; tone: "red" | "yellow" | "green"; module: "employees" | "tmc" | "documents" | "tasks" | "learning" | "vision"; kind: string };
 
 const dateTone = (value?: string | number | null): "red" | "yellow" | "green" => {
   if (!value) return "red";
@@ -14,9 +15,10 @@ const dateTone = (value?: string | number | null): "red" | "yellow" | "green" =>
 };
 const formatDate = (value?: string | number | null) => value ? new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(`${String(value).slice(0, 10)}T00:00:00`)) : "Без срока";
 
-export function OperationalOverview({ employeeCount, risks, tasks, assignments, visionEvents, canOpen, open, addEmployee }: {
+export function OperationalOverview({ employeeCount, risks, extraDeadlines, tasks, assignments, visionEvents, canOpen, open, addEmployee }: {
   employeeCount: number;
   risks: Risk[];
+  extraDeadlines: Array<{id:string;title:string;detail:string;date?:string|null;module:"tmc"|"documents"}>;
   tasks: TaskItem[];
   assignments: LearningAssignment[];
   visionEvents: VisionEvent[];
@@ -39,10 +41,11 @@ export function OperationalOverview({ employeeCount, risks, tasks, assignments, 
       id: `vision-${item.id}`, title: "Событие Safety Vision", detail: item.notes || item.event_type, date: item.occurred_at,
       tone: item.status === "new" ? "red" as const : "yellow" as const, module: "vision" as const, kind: "Камера",
     }));
-    return [...activeTasks, ...deadlines, ...learning, ...vision]
+    const extra = extraDeadlines.map(item=>({...item,tone:dateTone(item.date),kind:item.module==="tmc"?"Срок ТМЦ":"Пересмотр документа"}));
+    return [...activeTasks, ...deadlines, ...extra, ...learning, ...vision]
       .filter(item => canOpen(item.module))
       .sort((a, b) => ({ red: 0, yellow: 1, green: 2 }[a.tone] - { red: 0, yellow: 1, green: 2 }[b.tone]) || String(a.date || "").localeCompare(String(b.date || "")));
-  }, [assignments, canOpen, risks, tasks, visionEvents]);
+  }, [assignments, canOpen, extraDeadlines, risks, tasks, visionEvents]);
   const visible = filter === "all" ? queue : queue.filter(item => item.module === filter);
   const critical = queue.filter(item => item.tone === "red").length;
   const near = queue.filter(item => item.tone === "yellow").length;
@@ -71,12 +74,13 @@ export function OperationalOverview({ employeeCount, risks, tasks, assignments, 
       <section className="panel operations-queue">
         <div className="panel-title"><div><span className="eyebrow">ЕДИНАЯ ОЧЕРЕДЬ</span><h3>Следующие действия</h3></div><span className="queue-count">{visible.length}</span></div>
         <div className="queue-filters">
-          {(["all", "tasks", "employees", "learning", "vision"] as const).filter(item => item === "all" || canOpen(item)).map(item => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{({ all: "Все", tasks: "Задачи", employees: "Сроки", learning: "Обучение", vision: "Камеры" })[item]}</button>)}
+          {(["all", "tasks", "employees", "tmc", "documents", "learning", "vision"] as const).filter(item => item === "all" || canOpen(item)).map(item => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{({ all: "Все", tasks: "Задачи", employees: "Допуски", tmc:"ТМЦ",documents:"Документы", learning: "Обучение", vision: "Камеры" })[item]}</button>)}
         </div>
         <div className="action-queue">{visible.length ? visible.slice(0, 8).map(item => <button key={item.id} className="action-row" onClick={() => open(item.module)}><span className={`action-tone ${item.tone}`}/><span className="action-copy"><small>{item.kind}</small><strong>{item.title}</strong><span>{item.detail}</span></span><time>{formatDate(item.date)}</time><b>→</b></button>) : <div className="operations-empty"><span>✓</span><strong>Очередь пуста</strong><p>Новых действий по выбранному фильтру нет.</p></div>}</div>
       </section>
 
       <aside className="operations-side">
+        <RiskCalendar deadlines={queue.map(item => ({ date: item.date, tone: item.tone, title: item.title }))} />
         <section className="panel radar-insight"><span className="eyebrow">RADAR INSIGHT</span><h3>{critical ? "Сначала закройте просрочки" : "Система под контролем"}</h3><p>{critical ? "Красные события уже отсортированы сверху. После них переходите к ближайшим срокам и незавершённому обучению." : "Проверьте ближайшие сроки и назначьте ответственных заранее."}</p></section>
         <section className="panel module-health"><div className="panel-title"><div><span className="eyebrow">МОДУЛИ</span><h3>Состояние системы</h3></div></div>
           {canOpen("employees") && <button onClick={() => open("employees")}><span>HSE Control</span><strong>{risks.length ? `${risks.length} сроков` : "В норме"}</strong></button>}

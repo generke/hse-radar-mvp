@@ -14,7 +14,6 @@ export async function GET(request:NextRequest){
   const secret=process.env.CRON_SECRET;
   if(!secret||request.headers.get("authorization")!==`Bearer ${secret}`)return NextResponse.json({error:"Unauthorized"},{status:401});
   const resendKey=process.env.RESEND_API_KEY;const emailFrom=process.env.EMAIL_FROM;
-  if(!resendKey||!emailFrom)return NextResponse.json({error:"Email provider is not configured"},{status:503});
   const supabase=createAdminClient();const today=almatyDate();
   const {data:organizations,error:orgError}=await supabase.from("organizations").select("id,name");
   if(orgError)return NextResponse.json({error:orgError.message},{status:500});
@@ -25,7 +24,7 @@ export async function GET(request:NextRequest){
       supabase.from("employees").select("full_name,medical_exam_expiry,briefing_expiry,training_expiry").eq("organization_id",org.id).is("archived_at",null).or(`medical_exam_expiry.eq.${today},briefing_expiry.eq.${today},training_expiry.eq.${today}`),
       supabase.from("inventory").select("name,next_service_date").eq("organization_id",org.id).eq("next_service_date",today).is("archived_at",null),
       supabase.from("ppe_issues").select("employee_name,item_name,replacement_date").eq("organization_id",org.id).eq("replacement_date",today).is("archived_at",null),
-      supabase.from("documents").select("name,expires_at").eq("organization_id",org.id).eq("expires_at",today).is("archived_at",null),
+      supabase.from("documents").select("name,expires_at,review_date,is_perpetual").eq("organization_id",org.id).is("archived_at",null).eq("is_perpetual",false).or(`review_date.eq.${today},expires_at.eq.${today}`),
       supabase.from("learning_assignments").select("due_date,employees(full_name),learning_courses(title)").eq("organization_id",org.id).eq("due_date",today).not("status","in",'(passed)'),
     ]);
     const deadlines:Deadline[]=[];
@@ -33,12 +32,14 @@ export async function GET(request:NextRequest){
     for(const item of employees.data||[]){if(item.medical_exam_expiry===today)deadlines.push({label:"Медосмотр",title:item.full_name,date:today});if(item.briefing_expiry===today)deadlines.push({label:"Инструктаж",title:item.full_name,date:today});if(item.training_expiry===today)deadlines.push({label:"Обучение",title:item.full_name,date:today})}
     for(const item of inventory.data||[])deadlines.push({label:"Обслуживание",title:item.name,date:item.next_service_date});
     for(const item of ppe.data||[])deadlines.push({label:"Замена СИЗ",title:`${item.item_name} · ${item.employee_name}`,date:item.replacement_date});
-    for(const item of documents.data||[])deadlines.push({label:"Документ",title:item.name,date:item.expires_at});
+    for(const item of documents.data||[])deadlines.push({label:"Документ",title:item.name,date:item.review_date||item.expires_at});
     for(const item of assignments.data||[]){const employee=Array.isArray(item.employees)?item.employees[0]:item.employees;const course=Array.isArray(item.learning_courses)?item.learning_courses[0]:item.learning_courses;deadlines.push({label:"Обучение",title:`${course?.title||"Программа"} · ${employee?.full_name||"Работник"}`,date:item.due_date})}
     if(!deadlines.length)continue;organizationsWithDeadlines++;
     const {data:memberships,error:membershipError}=await supabase.from("memberships").select("user_id").eq("organization_id",org.id).eq("is_active",true);
     if(membershipError){failed++;console.error(`Recipient query failed for organization ${org.id}:`,membershipError.message);continue}
     for(const member of memberships||[]){
+      await supabase.from("user_notifications").upsert({organization_id:org.id,user_id:member.user_id,notification_date:today,source_key:"daily-deadlines",title:`Сегодня истекают сроки: ${deadlines.length}`,body:`${org.name}: закройте задачи или измените сроки до конца дня.`,severity:"critical"},{onConflict:"organization_id,user_id,notification_date,source_key"});
+      if(!resendKey||!emailFrom)continue;
       const {data:already}=await supabase.from("notification_deliveries").select("id").eq("organization_id",org.id).eq("recipient_user_id",member.user_id).eq("notification_date",today).eq("status","sent").maybeSingle();
       if(already)continue;
       const {data:userData}=await supabase.auth.admin.getUserById(member.user_id);const email=userData.user?.email;if(!email)continue;

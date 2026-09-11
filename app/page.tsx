@@ -3,6 +3,7 @@ import { Dashboard, type AdminAccessUser } from "@/components/dashboard";
 import type { AuditEvent, TaskItem, TeamMember } from "@/components/product-panels";
 import type { LearningAssignment, LearningAttempt, LearningCourse, VisionCamera, VisionEvent } from "@/components/module-panels";
 import type { JobProfile } from "@/components/positions-panel";
+import type { UserNotification } from "@/components/notification-center";
 import { sectionKeys, type SectionKey } from "@/lib/access";
 import { createClient } from "@/lib/supabase/server";
 
@@ -36,7 +37,7 @@ export default async function Home({searchParams}:{searchParams:Promise<{org?:st
   if(!selected)return <Dashboard demo userEmail={user.email} configurationError="Профиль создан, но рабочее пространство не найдено. Обратитесь к администратору."/>;
   const membership=memberships.find(item=>item.organization_id===selected.id);
   const role=isPlatformAdmin?"platform_admin":membership?.role||"member";
-  const [employees,inventory,ppe,documents,tasks,members,audit,paymentRequests,adminOrganizations,courses,questions,attempts,assignments,cameras,visionEvents,jobProfiles]=await Promise.all([
+  const [employees,inventory,ppe,documents,tasks,members,audit,paymentRequests,adminOrganizations,courses,questions,attempts,assignments,cameras,visionEvents,jobProfiles,notifications]=await Promise.all([
     supabase.from("employees").select("*").eq("organization_id",selected.id).is("archived_at",null).order("full_name"),
     supabase.from("inventory").select("*").eq("organization_id",selected.id).is("archived_at",null).order("name"),
     supabase.from("ppe_issues").select("*").eq("organization_id",selected.id).is("archived_at",null).order("replacement_date"),
@@ -53,6 +54,7 @@ export default async function Home({searchParams}:{searchParams:Promise<{org?:st
     supabase.from("vision_cameras").select("id,name,location,stream_url,status,zone_points,created_at").eq("organization_id",selected.id).order("created_at",{ascending:false}),
     supabase.from("vision_events").select("id,camera_id,event_type,status,confidence,notes,task_id,occurred_at").eq("organization_id",selected.id).order("occurred_at",{ascending:false}).limit(50),
     supabase.from("job_profiles").select("id,title,required_fields,required_training_codes,custom_training_name").eq("organization_id",selected.id).order("title"),
+    supabase.from("user_notifications").select("id,title,body,severity,read_at,created_at").eq("organization_id",selected.id).eq("user_id",user.id).order("created_at",{ascending:false}).limit(30),
   ]);
   const memberRows=(members.data||[]) as TeamMember[];
   const userIds=memberRows.map(item=>item.user_id);
@@ -74,5 +76,6 @@ export default async function Home({searchParams}:{searchParams:Promise<{org?:st
     learningCourses={learningCourses} learningAttempts={(attempts.data||[]) as LearningAttempt[]} learningAssignments={learningAssignments}
     visionCameras={(cameras.data||[]) as VisionCamera[]} visionEvents={(visionEvents.data||[]) as VisionEvent[]}
     jobProfiles={(jobProfiles.data||[]) as JobProfile[]}
+    notifications={(notifications.data||[]) as UserNotification[]}
     initialData={{employees:employees.data||[],inventory:inventory.data||[],ppe:ppe.data||[],documents:documents.data||[]}}/>;
 }

@@ -1,0 +1,17 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+export type UserNotification={id:string;title:string;body:string;created_at:string;read_at?:string|null;severity?:string};
+
+export function NotificationCenter({initial,supabaseUrl,supabaseKey}:{initial:UserNotification[];supabaseUrl:string;supabaseKey:string}){
+ const[items,setItems]=useState(initial),[open,setOpen]=useState(false),[permission,setPermission]=useState<NotificationPermission|"unsupported">(()=>typeof window!=="undefined"&&"Notification" in window?Notification.permission:"unsupported");
+ const unread=items.filter(item=>!item.read_at).length;
+ useEffect(()=>{if(!("Notification" in window)||Notification.permission!=="granted")return;const shown=new Set(JSON.parse(localStorage.getItem("hse-browser-notifications")||"[]") as string[]);const next=[...shown];for(const item of initial.filter(value=>!value.read_at)){if(shown.has(item.id))continue;new Notification(item.title,{body:item.body,icon:"/icon.svg",tag:item.id});next.push(item.id)}localStorage.setItem("hse-browser-notifications",JSON.stringify(next.slice(-100)))},[initial]);
+ useEffect(()=>{if(!supabaseUrl||!supabaseKey)return;const client=createClient(supabaseUrl,supabaseKey),channel=client.channel("deadline-alerts").on("postgres_changes",{event:"INSERT",schema:"public",table:"user_notifications"},payload=>{const item=payload.new as UserNotification;setItems(value=>value.some(existing=>existing.id===item.id)?value:[item,...value]);if("Notification" in window&&Notification.permission==="granted")new Notification(item.title,{body:item.body,icon:"/icon.svg",tag:item.id})}).subscribe();return()=>{void client.removeChannel(channel)}},[supabaseKey,supabaseUrl]);
+ async function allow(){if(!("Notification" in window))return;const result=await Notification.requestPermission();setPermission(result)}
+ async function markRead(){const ids=items.filter(item=>!item.read_at).map(item=>item.id);if(!ids.length)return;const now=new Date().toISOString();setItems(value=>value.map(item=>ids.includes(item.id)?{...item,read_at:now}:item));if(supabaseUrl&&supabaseKey)await createClient(supabaseUrl,supabaseKey).from("user_notifications").update({read_at:now}).in("id",ids)}
+ function toggle(){setOpen(value=>!value);if(!open)void markRead()}
+ return <div className="notification-center"><button className="icon-button bell-button" aria-label="Уведомления" onClick={toggle}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>{unread>0&&<i>{unread}</i>}</button>{open&&<><button className="quick-dismiss" aria-label="Закрыть уведомления" onClick={()=>setOpen(false)}/><section className="notification-popover"><div><strong>Уведомления</strong><small>Сроки на сегодня · 08:00</small></div>{permission!=="granted"&&<button className="browser-permission" onClick={allow} disabled={permission==="denied"}>{permission==="denied"?"Уведомления заблокированы в браузере":"Разрешить на рабочем столе"}</button>}<div className="notification-list">{items.length?items.map(item=><article key={item.id}><i/><div><strong>{item.title}</strong><p>{item.body}</p><time>{new Intl.DateTimeFormat("ru-RU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(item.created_at))}</time></div></article>):<p className="notification-empty">Новых уведомлений нет.</p>}</div></section></>}</div>
+}

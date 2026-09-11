@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { taskDeadlineLabel, taskDeadlineTone, type TaskItem, type TeamMember } from "./product-panels";
 
@@ -9,6 +9,7 @@ const roleLabels:Record<string,string>={owner:"Владелец",hse:"HSE",manag
 
 export function TasksPanel({initial,members,currentUserId,canManage,organizationId,supabaseUrl,supabaseKey}:{initial:TaskItem[];members:TeamMember[];currentUserId:string;canManage:boolean;organizationId:string;supabaseUrl:string;supabaseKey:string}){
   const[tasks,setTasks]=useState(initial),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[editing,setEditing]=useState<TaskItem|null>(null);
+  useEffect(()=>{const close=(event:PointerEvent)=>{const target=event.target as HTMLElement;if(target.classList.contains("modal-backdrop"))setEditing(null)};document.addEventListener("pointerdown",close);return()=>document.removeEventListener("pointerdown",close)},[]);
   const db=()=>createClient(supabaseUrl,supabaseKey);
   const assigneeName=(id?:string|null)=>id?(members.find(member=>member.user_id===id)?.full_name||id.slice(0,8)):"Не назначен";
   const mayEdit=(task:TaskItem)=>canManage||task.assignee_id===currentUserId||task.created_by===currentUserId;
