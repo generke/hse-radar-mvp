@@ -13,7 +13,7 @@ export async function POST(request:NextRequest){
   const {data:platformAdmin}=await supabase.from("platform_admins").select("user_id").eq("user_id",user.id).maybeSingle();
   if(!membership&&!platformAdmin)return NextResponse.json({error:"Организация недоступна."},{status:403});
   const code=randomBytes(24).toString("base64url"),tokenHash=createHash("sha256").update(code).digest("hex"),admin=createAdminClient();
-  const {error}=await admin.from("vision_telegram_pairings").insert({organization_id:String(organizationId),user_id:user.id,token_hash:tokenHash,expires_at:new Date(Date.now()+15*60*1000).toISOString()});
+  const {error}=await admin.from("vision_telegram_pairings").insert({organization_id:String(organizationId),user_id:user.id,code_hash:tokenHash,expires_at:new Date(Date.now()+15*60*1000).toISOString()});
   if(error)throw error;
   return NextResponse.json({url:`https://t.me/${telegramBotUsername}?start=${code}`});
  }catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Не удалось создать ссылку Telegram."},{status:500})}

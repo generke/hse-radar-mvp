@@ -5,8 +5,8 @@ export const telegramBotUsername=process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME||
 export async function telegramSecret(key:"bot_token"|"webhook_secret"){
  if(key==="bot_token"&&process.env.TELEGRAM_BOT_TOKEN)return process.env.TELEGRAM_BOT_TOKEN;
  const admin=createAdminClient();
- const {data}=await admin.from("vision_platform_secrets").select("secret_value").eq("secret_key",key).maybeSingle();
- return data?.secret_value||"";
+ const {data}=await admin.from("vision_platform_secrets").select("value").eq("key",key).maybeSingle();
+ return data?.value||"";
 }
 
 export async function sendTelegram(chatId:string,text:string){
