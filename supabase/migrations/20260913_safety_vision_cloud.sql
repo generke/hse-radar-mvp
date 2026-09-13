@@ -17,6 +17,26 @@ create table if not exists public.vision_notification_targets (
   unique(organization_id,chat_id)
 );
 
+alter table public.vision_notification_targets add column if not exists recipient_user_id uuid references auth.users(id) on delete set null;
+alter table public.vision_notification_targets add column if not exists telegram_user_id text;
+
+create table if not exists public.vision_telegram_pairings (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  code_hash text not null unique,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- Intentionally has no client policies. Only server-side service-role code can read bot secrets.
+create table if not exists public.vision_platform_secrets (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.vision_edge_agents (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -33,10 +53,16 @@ create table if not exists public.vision_edge_agents (
 
 create index if not exists vision_notification_targets_org_idx on public.vision_notification_targets(organization_id,enabled);
 create index if not exists vision_edge_agents_org_idx on public.vision_edge_agents(organization_id,status);
+create index if not exists vision_telegram_pairings_lookup_idx on public.vision_telegram_pairings(code_hash,expires_at) where used_at is null;
 
 alter table public.vision_notification_settings enable row level security;
 alter table public.vision_notification_targets enable row level security;
 alter table public.vision_edge_agents enable row level security;
+alter table public.vision_telegram_pairings enable row level security;
+alter table public.vision_platform_secrets enable row level security;
+
+drop policy if exists "own pairing read" on public.vision_telegram_pairings;
+create policy "own pairing read" on public.vision_telegram_pairings for select using (user_id=auth.uid());
 
 do $$ declare t text; begin
   foreach t in array array['vision_notification_settings','vision_notification_targets','vision_edge_agents'] loop
