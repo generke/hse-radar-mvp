@@ -1,0 +1,2 @@
+full_name,department,position,hire_date,external_id,email,medical_exam_expiry,briefing_expiry,training_expiry
+TEST USER 001,TEST DEPARTMENT,TEST POSITION,2026-01-01,TEST-001,test-user-001@example.invalid,2027-01-01,2027-01-01,2027-01-01
