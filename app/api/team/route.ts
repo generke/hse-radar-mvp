@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { normalizePermissions } from "@/lib/access";
+import { isRole, normalizePermissions } from "@/lib/access";
 
-const roles = new Set(["owner", "hse", "manager", "hr", "member"]);
 const sameOrigin=(request:NextRequest)=>!request.headers.get("origin")||request.headers.get("origin")===request.nextUrl.origin;
 
 async function authorize(organizationId: string) {
@@ -25,7 +24,7 @@ export async function POST(request: NextRequest) {
     const email = String(body.email || "").trim().toLowerCase();
     const role = String(body.role || "member");
     const sectionPermissions = normalizePermissions(role,body.sectionPermissions);
-    if (!organizationId || !/^\S+@\S+\.\S+$/.test(email) || !roles.has(role)) return NextResponse.json({ error: "Проверьте email и роль." }, { status: 400 });
+    if (!organizationId || !/^\S+@\S+\.\S+$/.test(email) || !isRole(role)) return NextResponse.json({ error: "Проверьте email и роль." }, { status: 400 });
     const auth = await authorize(organizationId); if (auth.error) return auth.error;
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("invite_member_by_email", { org_id:organizationId, invite_email:email, invite_role:role, invite_permissions:sectionPermissions });
@@ -47,7 +46,7 @@ export async function PATCH(request: NextRequest) {
     const userId = String(body.userId || "");
     const role = String(body.role || "");
     const sectionPermissions = normalizePermissions(role,body.sectionPermissions);
-    if (!organizationId || !userId || !roles.has(role)) return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
+    if (!organizationId || !userId || !isRole(role)) return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
     const auth = await authorize(organizationId); if (auth.error) return auth.error;
     const supabase = await createClient();
     const { error } = await supabase.from("memberships").update({ role, section_permissions:sectionPermissions }).eq("organization_id", organizationId).eq("user_id", userId);
