@@ -208,7 +208,41 @@ begin
   if org_id is not null then
     insert into public.audit_events(organization_id,actor_id,action,entity_type,entity_id,before_data,after_data,request_id,ip_hash,user_agent,context)
     values(org_id,auth.uid(),event_action,tg_table_name,row_id,old_row,new_row,
-      nullif(current_setting('request.headers',true),'')::jsonb->>'x-request-id',
+      case when coalesce(nullif(current_setting('request.headers',true),'')::jsonb->>'x-request-id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}
+      encode(digest(coalesce(nullif(current_setting('request.headers',true),'')::jsonb->>'x-forwarded-for','unknown'),'sha256'),'hex'),
+      left(coalesce(nullif(current_setting('request.headers',true),'')::jsonb->>'user-agent','unknown'),512),
+      jsonb_build_object('database_role',current_user));
+  end if;
+  return coalesce(new,old);
+end;
+$$;
+
+create or replace function public.prevent_audit_mutation()
+returns trigger language plpgsql as $$
+begin raise exception 'AUDIT_LOG_IMMUTABLE'; end;
+$$;
+drop trigger if exists audit_events_immutable on public.audit_events;
+create trigger audit_events_immutable before update or delete on public.audit_events
+for each row execute function public.prevent_audit_mutation();
+revoke insert,update,delete,truncate on public.audit_events from anon,authenticated;
+
+do $$ declare t text; begin
+  foreach t in array array['departments','requirements','employee_requirements','evidence','job_profiles','learning_assignments','training_types'] loop
+    execute format('drop trigger if exists audit_row_change on public.%I',t);
+    execute format('create trigger audit_row_change after insert or update or delete on public.%I for each row execute function public.record_audit_event()',t);
+  end loop;
+end $$;
+
+drop trigger if exists departments_updated_at on public.departments;
+create trigger departments_updated_at before update on public.departments for each row execute function public.set_updated_at();
+drop trigger if exists requirements_updated_at on public.requirements;
+create trigger requirements_updated_at before update on public.requirements for each row execute function public.set_updated_at();
+drop trigger if exists employee_requirements_updated_at on public.employee_requirements;
+create trigger employee_requirements_updated_at before update on public.employee_requirements for each row execute function public.set_updated_at();
+
+comment on table public.employee_requirements is
+  'Canonical safety obligation: requirement + employee + due date + owner + status + closure evidence.';
+ then (nullif(current_setting('request.headers',true),'')::jsonb->>'x-request-id')::uuid else gen_random_uuid() end,
       encode(digest(coalesce(nullif(current_setting('request.headers',true),'')::jsonb->>'x-forwarded-for','unknown'),'sha256'),'hex'),
       left(coalesce(nullif(current_setting('request.headers',true),'')::jsonb->>'user-agent','unknown'),512),
       jsonb_build_object('database_role',current_user));
