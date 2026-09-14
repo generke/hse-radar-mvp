@@ -1,0 +1,28 @@
+name: verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  application:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - name: Reject committed secrets
+        run: |
+          if git grep -nE '(SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|TELEGRAM_BOT_TOKEN)=[^[:space:]]+' -- ':!*.example' ':!*.md'; then
+            echo "Potential secret committed"
+            exit 1
+          fi
