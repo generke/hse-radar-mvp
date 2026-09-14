@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizePermissions } from "@/lib/access";
 
 const roles = new Set(["owner", "hse", "manager", "hr", "member"]);
@@ -28,28 +27,13 @@ export async function POST(request: NextRequest) {
     const sectionPermissions = normalizePermissions(role,body.sectionPermissions);
     if (!organizationId || !/^\S+@\S+\.\S+$/.test(email) || !roles.has(role)) return NextResponse.json({ error: "Проверьте email и роль." }, { status: 400 });
     const auth = await authorize(organizationId); if (auth.error) return auth.error;
-    const admin = createAdminClient();
-    const { data: users, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    if (listError) throw listError;
-    let target = users.users.find(item => item.email?.toLowerCase() === email);
-    let invited = false;
-    let inviteUrl: string | null = null;
-    if (!target) {
-      const site = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
-      const result = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: site, data: { full_name: email.split("@")[0] } });
-      if (result.error) {
-        const fallback = await admin.auth.admin.generateLink({ type:"invite", email, options:{ redirectTo:site, data:{ full_name:email.split("@")[0] } } });
-        if(fallback.error)throw new Error(`${result.error.message}. ${fallback.error.message}`);
-        target=fallback.data.user;inviteUrl=fallback.data.properties.action_link;
-      } else target = result.data.user;
-      invited = true;
-    }
-    if (!target) throw new Error("Не удалось создать приглашение.");
-    const { error } = await admin.from("memberships").upsert({ organization_id: organizationId, user_id: target.id, role, section_permissions:sectionPermissions, is_active:true }, { onConflict: "organization_id,user_id" });
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("invite_member_by_email", { org_id:organizationId, invite_email:email, invite_role:role, invite_permissions:sectionPermissions });
     if (error) throw error;
-    const fullName=String(target.user_metadata?.full_name||email.split("@")[0]);
-    await admin.from("profiles").upsert({id:target.id,full_name:fullName,email},{onConflict:"id"});
-    return NextResponse.json({ ok: true, invited, inviteUrl, member:{user_id:target.id,role,section_permissions:sectionPermissions,is_active:true,created_at:new Date().toISOString(),full_name:fullName,email} });
+    const result=(data||{}) as {existing?:boolean;token?:string;user_id?:string;full_name?:string;email?:string};
+    const site = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
+    const inviteUrl=result.token?`${site}/?invitation=${encodeURIComponent(result.token)}&email=${encodeURIComponent(email)}`:null;
+    return NextResponse.json({ ok:true, invited:!result.existing, inviteUrl, member:result.existing?{user_id:result.user_id,role,section_permissions:sectionPermissions,is_active:true,created_at:new Date().toISOString(),full_name:result.full_name,email:result.email}:null });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Не удалось пригласить пользователя." }, { status: 500 });
   }
@@ -65,8 +49,8 @@ export async function PATCH(request: NextRequest) {
     const sectionPermissions = normalizePermissions(role,body.sectionPermissions);
     if (!organizationId || !userId || !roles.has(role)) return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
     const auth = await authorize(organizationId); if (auth.error) return auth.error;
-    const admin = createAdminClient();
-    const { error } = await admin.from("memberships").update({ role, section_permissions:sectionPermissions }).eq("organization_id", organizationId).eq("user_id", userId);
+    const supabase = await createClient();
+    const { error } = await supabase.from("memberships").update({ role, section_permissions:sectionPermissions }).eq("organization_id", organizationId).eq("user_id", userId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -82,13 +66,13 @@ export async function DELETE(request: NextRequest) {
     if (!organizationId || !userId) return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
     const auth = await authorize(organizationId); if (auth.error) return auth.error;
     if (auth.user?.id === userId) return NextResponse.json({ error: "Нельзя удалить собственный доступ." }, { status: 400 });
-    const admin = createAdminClient();
-    const { data: member } = await admin.from("memberships").select("role").eq("organization_id", organizationId).eq("user_id", userId).maybeSingle();
+    const supabase = await createClient();
+    const { data: member } = await supabase.from("memberships").select("role").eq("organization_id", organizationId).eq("user_id", userId).maybeSingle();
     if (member?.role === "owner") {
-      const { count } = await admin.from("memberships").select("*", { count: "exact", head: true }).eq("organization_id", organizationId).eq("role", "owner");
+      const { count } = await supabase.from("memberships").select("*", { count: "exact", head: true }).eq("organization_id", organizationId).eq("role", "owner");
       if ((count || 0) <= 1) return NextResponse.json({ error: "В организации должен остаться хотя бы один владелец." }, { status: 400 });
     }
-    const { error } = await admin.from("memberships").delete().eq("organization_id", organizationId).eq("user_id", userId);
+    const { error } = await supabase.from("memberships").delete().eq("organization_id", organizationId).eq("user_id", userId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (error) {

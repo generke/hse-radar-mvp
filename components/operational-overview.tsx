@@ -49,9 +49,16 @@ export function OperationalOverview({ employeeCount, risks, extraDeadlines, task
   const visible = filter === "all" ? queue : queue.filter(item => item.module === filter);
   const critical = queue.filter(item => item.tone === "red").length;
   const near = queue.filter(item => item.tone === "yellow").length;
+  const controlled = queue.filter(item => item.tone === "green").length;
   const activeTasks = tasks.filter(item => !["verified", "done"].includes(item.status)).length;
   const overdueLearning = assignments.filter(item => item.status !== "passed" && dateTone(item.due_date) === "red").length;
   const newVision = visionEvents.filter(item => item.status === "new").length;
+  const health=(issues:number,total:number)=>total?Math.max(0,Math.round((1-Math.min(issues,total)/total)*100)):100;
+  const moduleHealth=[
+    {id:"employees",label:"HSE Control",issues:risks.length,total:Math.max(employeeCount,risks.length)},
+    {id:"learning",label:"Обучение",issues:overdueLearning,total:Math.max(assignments.length,overdueLearning)},
+    {id:"vision",label:"Safety Vision",issues:newVision,total:Math.max(visionEvents.length,newVision)},
+  ].filter(item=>canOpen(item.id));
 
   return <>
     <section className="page-heading operations-heading"><div><span className="eyebrow">ОПЕРАТИВНЫЙ ЦЕНТР</span><h1>Что требует внимания сегодня</h1><p>{new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date())} · единая картина по организации</p></div>{canOpen("employees") && <button className="button dark" onClick={addEmployee}>＋ Добавить сотрудника</button>}</section>
@@ -81,11 +88,9 @@ export function OperationalOverview({ employeeCount, risks, extraDeadlines, task
 
       <aside className="operations-side">
         <RiskCalendar deadlines={queue.map(item => ({ date: item.date, tone: item.tone, title: item.title }))} />
-        <section className="panel radar-insight"><span className="eyebrow">RADAR INSIGHT</span><h3>{critical ? "Сначала закройте просрочки" : "Система под контролем"}</h3><p>{critical ? "Красные события уже отсортированы сверху. После них переходите к ближайшим срокам и незавершённому обучению." : "Проверьте ближайшие сроки и назначьте ответственных заранее."}</p></section>
+        <section className="panel radar-insight"><span className="eyebrow">RADAR INSIGHT</span><h3>{critical ? "Сначала закройте просрочки" : "Система под контролем"}</h3><div className="insight-kanban"><button onClick={()=>setFilter("all")}><i className="red"/><b>{critical}</b><span>Просрочено</span></button><button onClick={()=>setFilter("all")}><i className="yellow"/><b>{near}</b><span>Скоро срок</span></button><button onClick={()=>setFilter("all")}><i className="green"/><b>{controlled}</b><span>Под контролем</span></button></div><p>{critical ? "Красные события уже отсортированы сверху. После них переходите к ближайшим срокам и незавершённому обучению." : "Проверьте ближайшие сроки и назначьте ответственных заранее."}</p></section>
         <section className="panel module-health"><div className="panel-title"><div><span className="eyebrow">МОДУЛИ</span><h3>Состояние системы</h3></div></div>
-          {canOpen("employees") && <button onClick={() => open("employees")}><span>HSE Control</span><strong>{risks.length ? `${risks.length} сроков` : "В норме"}</strong></button>}
-          {canOpen("learning") && <button onClick={() => open("learning")}><span>Обучение</span><strong>{overdueLearning ? `${overdueLearning} просрочено` : "Под контролем"}</strong></button>}
-          {canOpen("vision") && <button onClick={() => open("vision")}><span>Safety Vision</span><strong>{newVision ? `${newVision} новых` : "Без событий"}</strong></button>}
+          {moduleHealth.map(item=>{const value=health(item.issues,item.total);return <button key={item.id} onClick={() => open(item.id)}><span><b>{item.label}</b><i><em style={{width:`${value}%`}}/></i></span><strong>{value}%</strong></button>})}
         </section>
       </aside>
     </section>
