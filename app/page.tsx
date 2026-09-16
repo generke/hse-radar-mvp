@@ -8,7 +8,6 @@ import { normalizePermissions, sectionKeys, type SectionKey } from "@/lib/access
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
 type MembershipRow = {
   organization_id:string; role:string; created_at:string; section_permissions?:SectionKey[];is_active?:boolean;
   organizations:{ id:string; name:string; plan:string; subscription_status:string; subscription_expires_at?:string|null } | { id:string; name:string; plan:string; subscription_status:string; subscription_expires_at?:string|null }[] | null;
@@ -23,12 +22,17 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
   const supabaseKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.SUPABASE_ANON_KEY||"";
   if(!supabaseUrl||!supabaseKey)return <Dashboard demo/>;
   const supabase=await createClient();
-  const {data:{user}}=await supabase.auth.getUser();
-  if(!user)return <AuthScreen supabaseUrl={supabaseUrl} supabaseKey={supabaseKey}/>;
+  // getClaims verifies the JWT against Supabase JWKS (cached by the SDK).
+  // getUser always makes an additional network request to Auth on every
+  // navigation, even though proxy.ts has already refreshed the session.
+  const {data:claimsData}=await supabase.auth.getClaims();
+  const claims=claimsData?.claims;
+  if(!claims?.sub)return <AuthScreen supabaseUrl={supabaseUrl} supabaseKey={supabaseKey}/>;
+  const user={id:claims.sub,email:typeof claims.email==="string"?claims.email:undefined};
   const params=await searchParams;
   const [{data:platformAdmin},{data:membershipData}]=await Promise.all([
     supabase.from("platform_admins").select("user_id").eq("user_id",user.id).maybeSingle(),
-    supabase.from("memberships").select("organization_id,role,created_at,section_permissions,is_active,organizations(id,name,plan,subscription_status,subscription_expires_at)").eq("user_id",user.id).order("created_at"),
+    supabase.from("memberships").select("organization_id,role,created_at,section_permissions,is_active,organizations(id,name,plan,subscription_status,subscription_expires_at)").eq("user_id",user.id).eq("is_active",true).order("created_at"),
   ]);
   const isPlatformAdmin=Boolean(platformAdmin);
   const memberships=(membershipData||[]) as MembershipRow[];
@@ -70,7 +74,9 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
     needVision?supabase.from("vision_cameras").select("id,name,location,stream_url,status,zone_points,created_at").eq("organization_id",selected.id).order("created_at",{ascending:false}):empty(),
     needVision?supabase.from("vision_events").select("id,camera_id,event_type,status,confidence,notes,task_id,occurred_at").eq("organization_id",selected.id).order("occurred_at",{ascending:false}).limit(50):empty(),
     ["employees","positions"].includes(activeSection)?supabase.from("job_profiles").select("id,title,required_fields,required_training_codes,custom_training_name,custom_training_names").eq("organization_id",selected.id).order("title"):empty(),
-    supabase.from("user_notifications").select("id,title,body,severity,read_at,created_at").eq("organization_id",selected.id).eq("user_id",user.id).order("created_at",{ascending:false}).limit(30),
+    // Notifications are loaded after the section is interactive. They should
+    // never hold up the critical navigation path.
+    empty(),
     activeSection==="learning"?supabase.from("training_types").select("id,name,format,is_active").eq("organization_id",selected.id).order("name"):empty(),
     activeSection==="documents"?supabase.from("document_categories").select("id,name,is_active").eq("organization_id",selected.id).order("name"):empty(),
   ]);

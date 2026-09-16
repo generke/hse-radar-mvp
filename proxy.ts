@@ -24,4 +24,8 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"] };
+export const config = {
+  // Only application pages need an auth refresh. Running Auth for icons and a
+  // public health probe adds latency and unnecessary Supabase traffic.
+  matcher: ["/((?!api/health|_next/static|_next/image|favicon.ico|icon.svg|apple-touch-icon(?:-precomposed)?\\.png).*)"],
+};

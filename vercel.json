@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
+  "regions": ["syd1"],
   "crons": [{
     "path": "/api/cron/deadline-notifications",
     "schedule": "0 3 * * *"
