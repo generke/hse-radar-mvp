@@ -71,8 +71,9 @@ export async function DELETE(request: NextRequest) {
       const { count } = await supabase.from("memberships").select("*", { count: "exact", head: true }).eq("organization_id", organizationId).eq("role", "owner");
       if ((count || 0) <= 1) return NextResponse.json({ error: "В организации должен остаться хотя бы один владелец." }, { status: 400 });
     }
-    const { error } = await supabase.from("memberships").delete().eq("organization_id", organizationId).eq("user_id", userId);
+    const { data: removed, error } = await supabase.from("memberships").delete().eq("organization_id", organizationId).eq("user_id", userId).select("user_id").maybeSingle();
     if (error) throw error;
+    if (!removed) return NextResponse.json({ error: "Пользователь не найден или доступ уже удалён." }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Не удалось удалить участника." }, { status: 500 });
