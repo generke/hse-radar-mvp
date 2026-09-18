@@ -20,7 +20,7 @@ const empty=()=>Promise.resolve({data:[],error:null});
 export default async function Home({searchParams}:{searchParams:Promise<SearchParams>}) {
   const supabaseUrl=process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.SUPABASE_URL||"";
   const supabaseKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.SUPABASE_ANON_KEY||"";
-  if(!supabaseUrl||!supabaseKey)return <Dashboard demo/>;
+  if(!supabaseUrl||!supabaseKey)return <Dashboard configurationError="Система временно недоступна: не заданы параметры подключения."/>;
   const supabase=await createClient();
   // getClaims verifies the JWT against Supabase JWKS (cached by the SDK).
   // getUser always makes an additional network request to Auth on every
@@ -43,7 +43,7 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
     ?(allOrganizations||[]).map(org=>({id:org.id,name:org.name,role:"platform_admin",plan:org.plan,subscription_status:org.subscription_status,section_permissions:[...sectionKeys]}))
     :memberships.filter(item=>item.is_active!==false).map(item=>{const org=related(item.organizations);return{id:item.organization_id,name:org?.name||"Организация",role:item.role,plan:org?.plan||"free",subscription_status:org?.subscription_status||"free",section_permissions:normalizePermissions(item.role,item.section_permissions)}});
   const selected=workspaces.find(org=>org.id===params.org)||workspaces[0];
-  if(!selected)return <Dashboard demo userEmail={user.email} configurationError="Профиль создан, но рабочее пространство не найдено. Обратитесь к администратору."/>;
+  if(!selected)return <Dashboard userEmail={user.email} configurationError="Профиль создан, но рабочее пространство не найдено. Обратитесь к администратору."/>;
 
   const membership=memberships.find(item=>item.organization_id===selected.id);
   const role=isPlatformAdmin?"platform_admin":membership?.role||"member";

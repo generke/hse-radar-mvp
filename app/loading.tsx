@@ -1,1 +1,3 @@
-export default function Loading(){return <div className="route-loading" role="status" aria-label="Загрузка раздела"><span/><div><b/><b/><b/></div></div>}
+import { RadarLoader } from "@/components/radar-loader";
+
+export default function Loading(){return <main className="route-loading route-loading-radar"><RadarLoader label="Radar ищет объекты…"/></main>}
