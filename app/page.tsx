@@ -6,6 +6,7 @@ import type { JobProfile } from "@/components/positions-panel";
 import type { UserNotification } from "@/components/notification-center";
 import { normalizePermissions, sectionKeys, type SectionKey } from "@/lib/access";
 import { createClient } from "@/lib/supabase/server";
+import { PasswordChangeScreen } from "@/components/password-change-screen";
 
 export const dynamic = "force-dynamic";
 type MembershipRow = {
@@ -28,6 +29,8 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
   const {data:claimsData}=await supabase.auth.getClaims();
   const claims=claimsData?.claims;
   if(!claims?.sub)return <AuthScreen supabaseUrl={supabaseUrl} supabaseKey={supabaseKey}/>;
+  const appMetadata=(claims.app_metadata||{}) as Record<string,unknown>;
+  if(appMetadata.must_change_password===true)return <PasswordChangeScreen supabaseUrl={supabaseUrl} supabaseKey={supabaseKey}/>;
   const user={id:claims.sub,email:typeof claims.email==="string"?claims.email:undefined};
   const params=await searchParams;
   const [{data:platformAdmin},{data:membershipData}]=await Promise.all([
@@ -49,7 +52,7 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
   const role=isPlatformAdmin?"platform_admin":membership?.role||"member";
   const permissions=isPlatformAdmin||role==="owner"?[...sectionKeys]:normalizePermissions(role,membership?.section_permissions);
   const requested=params.section as Tab|undefined;
-  const activeSection:Tab=requested==="admin"&&isPlatformAdmin?"admin":requested&&sectionKeys.includes(requested as SectionKey)&&permissions.includes(requested as SectionKey)?requested:"overview";
+  const activeSection:Tab=requested==="admin"&&isPlatformAdmin?"admin":requested==="audit"&&!isPlatformAdmin?"overview":requested&&sectionKeys.includes(requested as SectionKey)&&permissions.includes(requested as SectionKey)?requested:"overview";
   const overview=activeSection==="overview";
   const needEmployees=overview||["employees","tmc","learning","billing"].includes(activeSection);
   const needMembers=overview||["tasks","team","audit","admin"].includes(activeSection);
@@ -64,7 +67,7 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
     overview||activeSection==="documents"||activeSection==="billing"?supabase.from("documents").select("*").eq("organization_id",selected.id).is("archived_at",null).order("created_at",{ascending:false}):empty(),
     overview||activeSection==="tasks"?supabase.from("tasks").select("*").eq("organization_id",selected.id).is("archived_at",null).order("due_date"):empty(),
     needMembers?supabase.from("memberships").select("organization_id,user_id,role,section_permissions,is_active,created_at").eq("organization_id",selected.id).order("created_at"):empty(),
-    activeSection==="audit"?supabase.from("audit_events").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}).limit(200):empty(),
+    activeSection==="audit"&&isPlatformAdmin?supabase.from("audit_events").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}).limit(200):empty(),
     needPayments?supabase.from("payment_requests").select("id,organization_id,payment_reference,status,created_at,amount,billing_months,organizations(name,plan,subscription_status)").order("created_at",{ascending:false}).limit(isPlatformAdmin?100:10):empty(),
     activeSection==="admin"&&isPlatformAdmin?supabase.from("organizations").select("id,name,plan,subscription_status,subscription_expires_at,created_at").order("created_at",{ascending:false}):empty(),
     needLearning?supabase.from("learning_courses").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}):empty(),
