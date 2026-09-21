@@ -3,9 +3,12 @@ import "./globals.css";
 import { LanguageProvider } from "@/components/language-provider";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://hse-radar-mvp.vercel.app"),
   title: "HSE Radar — Оперативный центр",
   description: "Сроки, допуски, СИЗ и риски в одном рабочем пространстве.",
   icons:{icon:"/icon.svg",shortcut:"/icon.svg",apple:"/icon.svg"},
+  openGraph:{title:"HSE Radar — Оперативный центр",description:"Сроки, допуски, СИЗ и риски в одном рабочем пространстве.",type:"website",locale:"ru_KZ"},
+  robots:{index:true,follow:true},
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
