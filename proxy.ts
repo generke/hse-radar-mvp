@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  const startedAt = performance.now();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
   if (!url || !key) return NextResponse.next();
@@ -21,6 +22,9 @@ export async function proxy(request: NextRequest) {
     },
   );
   await supabase.auth.getClaims();
+  // Keep authentication observable without issuing any extra request. This
+  // lets slow navigations be separated from page rendering in production.
+  response.headers.set("Server-Timing", `auth;dur=${(performance.now() - startedAt).toFixed(1)}`);
   return response;
 }
 
