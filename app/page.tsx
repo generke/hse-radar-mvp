@@ -15,6 +15,7 @@ type MembershipRow = {
 };
 type SearchParams={org?:string;section?:string;invitation?:string};
 type ProfileRow={id:string;full_name?:string|null;email?:string|null};
+type DashboardRow=Record<string,unknown>&{id:string;organization_id?:string};
 const related=<T,>(value:T|T[]|null):T|undefined=>Array.isArray(value)?value[0]:value||undefined;
 const empty=()=>Promise.resolve({data:[],error:null});
 
@@ -59,23 +60,31 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
   const needLearning=overview||activeSection==="learning";
   const needVision=overview||activeSection==="vision";
   const needPayments=["billing","admin"].includes(activeSection);
+  // The operational centre only needs deadline data. Loading full employee,
+  // inventory, document, task and camera records here was inflating the SSR
+  // payload and slowing every return to the main screen.
+  const employeeColumns=activeSection==="employees"||activeSection==="tmc"?"*":activeSection==="learning"?"id,full_name,department":activeSection==="billing"?"id":"id,full_name,medical_exam_expiry,required_training_codes,training_records";
+  const inventoryColumns=activeSection==="tmc"?"*":activeSection==="billing"?"id":"id,name,category,next_service_date";
+  const ppeColumns=activeSection==="tmc"?"*":activeSection==="billing"?"id":"id,item_name,replacement_date";
+  const documentColumns=activeSection==="documents"?"*":activeSection==="billing"?"id":"id,name,review_date,expires_at,is_perpetual";
+  const taskColumns=activeSection==="tasks"?"*":"id,title,description,priority,status,assignee_id,due_date";
 
   const [employees,inventory,ppe,documents,tasks,members,audit,paymentRequests,adminOrganizations,courses,questions,attempts,assignments,cameras,visionEvents,jobProfiles,notifications,trainingTypes,documentCategories]=await Promise.all([
-    needEmployees?supabase.from("employees").select("*").eq("organization_id",selected.id).is("archived_at",null).order("full_name"):empty(),
-    overview||activeSection==="tmc"||activeSection==="billing"?supabase.from("inventory").select("*").eq("organization_id",selected.id).is("archived_at",null).order("name"):empty(),
-    overview||activeSection==="tmc"||activeSection==="billing"?supabase.from("ppe_issues").select("*").eq("organization_id",selected.id).is("archived_at",null).order("replacement_date"):empty(),
-    overview||activeSection==="documents"||activeSection==="billing"?supabase.from("documents").select("*").eq("organization_id",selected.id).is("archived_at",null).order("created_at",{ascending:false}):empty(),
-    overview||activeSection==="tasks"?supabase.from("tasks").select("*").eq("organization_id",selected.id).is("archived_at",null).order("due_date"):empty(),
+    needEmployees?supabase.from("employees").select(employeeColumns).eq("organization_id",selected.id).is("archived_at",null).order("full_name"):empty(),
+    overview||activeSection==="tmc"||activeSection==="billing"?supabase.from("inventory").select(inventoryColumns).eq("organization_id",selected.id).is("archived_at",null).order("name"):empty(),
+    overview||activeSection==="tmc"||activeSection==="billing"?supabase.from("ppe_issues").select(ppeColumns).eq("organization_id",selected.id).is("archived_at",null).order("replacement_date"):empty(),
+    overview||activeSection==="documents"||activeSection==="billing"?supabase.from("documents").select(documentColumns).eq("organization_id",selected.id).is("archived_at",null).order("created_at",{ascending:false}):empty(),
+    overview||activeSection==="tasks"?supabase.from("tasks").select(taskColumns).eq("organization_id",selected.id).is("archived_at",null).order("due_date"):empty(),
     needMembers?supabase.from("memberships").select("organization_id,user_id,role,section_permissions,is_active,created_at").eq("organization_id",selected.id).order("created_at"):empty(),
     activeSection==="audit"&&isPlatformAdmin?supabase.from("audit_events").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}).limit(200):empty(),
     needPayments?supabase.from("payment_requests").select("id,organization_id,payment_reference,status,created_at,amount,billing_months,organizations(name,plan,subscription_status)").order("created_at",{ascending:false}).limit(isPlatformAdmin?100:10):empty(),
     activeSection==="admin"&&isPlatformAdmin?supabase.from("organizations").select("id,name,plan,subscription_status,subscription_expires_at,created_at").order("created_at",{ascending:false}):empty(),
-    needLearning?supabase.from("learning_courses").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}):empty(),
+    activeSection==="learning"?supabase.from("learning_courses").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}):empty(),
     activeSection==="learning"?supabase.from("learning_questions").select("course_id").eq("organization_id",selected.id):empty(),
     activeSection==="learning"?supabase.from("learning_attempts").select("id,course_id,score,passed,completed_at").eq("organization_id",selected.id).order("completed_at",{ascending:false}).limit(30):empty(),
     needLearning?supabase.from("learning_assignments").select("id,course_id,employee_id,due_date,status,score,completed_at,employees(full_name,department),learning_courses(title,course_type)").eq("organization_id",selected.id).order("due_date"):empty(),
-    needVision?supabase.from("vision_cameras").select("id,name,location,stream_url,status,zone_points,created_at").eq("organization_id",selected.id).order("created_at",{ascending:false}):empty(),
-    needVision?supabase.from("vision_events").select("id,camera_id,event_type,status,confidence,notes,task_id,occurred_at").eq("organization_id",selected.id).order("occurred_at",{ascending:false}).limit(50):empty(),
+    activeSection==="vision"?supabase.from("vision_cameras").select("id,name,location,stream_url,status,zone_points,created_at").eq("organization_id",selected.id).order("created_at",{ascending:false}):empty(),
+    needVision?supabase.from("vision_events").select("id,camera_id,event_type,status,confidence,notes,task_id,occurred_at").eq("organization_id",selected.id).order("occurred_at",{ascending:false}).limit(activeSection==="vision"?50:12):empty(),
     ["employees","positions"].includes(activeSection)?supabase.from("job_profiles").select("id,title,required_fields,required_training_codes,custom_training_name,custom_training_names").eq("organization_id",selected.id).order("title"):empty(),
     // Notifications are loaded after the section is interactive. They should
     // never hold up the critical navigation path.
@@ -107,10 +116,10 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
     isPlatformAdmin={isPlatformAdmin} workspaces={workspaces} sectionPermissions={permissions}
     kaspiPayUrl={process.env.NEXT_PUBLIC_KASPI_PAY_URL||""}
     paymentRequests={paymentRequests.data||[]} adminOrganizations={adminOrganizations.data||[]} adminAccessUsers={adminAccessUsers}
-    tasks={(tasks.data||[]) as TaskItem[]} members={team} auditEvents={(audit.data||[]) as AuditEvent[]}
+    tasks={(tasks.data||[]) as unknown as TaskItem[]} members={team} auditEvents={(audit.data||[]) as AuditEvent[]}
     learningCourses={learningCourses} learningAttempts={(attempts.data||[]) as LearningAttempt[]} learningAssignments={learningAssignments}
     visionCameras={(cameras.data||[]) as VisionCamera[]} visionEvents={(visionEvents.data||[]) as VisionEvent[]}
     jobProfiles={(jobProfiles.data||[]) as JobProfile[]} notifications={(notifications.data||[]) as UserNotification[]}
     trainingTypes={trainingTypes.data||[]} documentCategories={documentCategories.data||[]}
-    initialData={{employees:employees.data||[],inventory:inventory.data||[],ppe:ppe.data||[],documents:documents.data||[]}}/>;
+    initialData={{employees:(employees.data||[]) as unknown as DashboardRow[],inventory:(inventory.data||[]) as unknown as DashboardRow[],ppe:(ppe.data||[]) as unknown as DashboardRow[],documents:(documents.data||[]) as unknown as DashboardRow[]}}/>;
 }
