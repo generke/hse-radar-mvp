@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isRole, normalizePermissions } from "@/lib/access";
+import { sendTransactionalEmail } from "@/lib/notifications/server";
 
 const sameOrigin=(request:NextRequest)=>!request.headers.get("origin")||request.headers.get("origin")===request.nextUrl.origin;
 
@@ -32,7 +33,18 @@ export async function POST(request: NextRequest) {
     const result=(data||{}) as {existing?:boolean;token?:string;user_id?:string;full_name?:string;email?:string};
     const site = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
     const inviteUrl=result.token?`${site}/?invitation=${encodeURIComponent(result.token)}&email=${encodeURIComponent(email)}`:null;
-    return NextResponse.json({ ok:true, invited:!result.existing, inviteUrl, member:result.existing?{user_id:result.user_id,role,section_permissions:sectionPermissions,is_active:true,created_at:new Date().toISOString(),full_name:result.full_name,email:result.email}:null });
+    const organization=await supabase.from("organizations").select("name").eq("id",organizationId).maybeSingle();
+    const emailResult=await sendTransactionalEmail({
+      to:email,
+      subject:"Приглашение в HSE Radar",
+      heading:"Вам открыт доступ к HSE Radar",
+      body:result.existing
+        ?`Вам открыт доступ к организации ${organization.data?.name||"HSE Radar"}. Войдите под своим текущим паролем.`
+        :`Вас пригласили в организацию ${organization.data?.name||"HSE Radar"}. Перейдите по ссылке, создайте пароль и завершите регистрацию в течение 7 дней.`,
+      actionLabel:result.existing?"Войти в HSE Radar":"Принять приглашение",
+      actionUrl:inviteUrl||site,
+    });
+    return NextResponse.json({ ok:true, invited:!result.existing, emailSent:emailResult.ok, inviteUrl, member:result.existing?{user_id:result.user_id,role,section_permissions:sectionPermissions,is_active:true,created_at:new Date().toISOString(),full_name:result.full_name,email:result.email}:null });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Не удалось пригласить пользователя." }, { status: 500 });
   }
