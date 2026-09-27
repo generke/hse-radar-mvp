@@ -1,13 +1,29 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { RadarLogo } from "./logo";
 import { LanguageSwitcher } from "./language-provider";
 
+const AUTH_TIMEOUT_MS=20_000;
+const withTimeout=<T,>(operation:Promise<T>)=>Promise.race<T>([
+  operation,
+  new Promise<T>((_,reject)=>setTimeout(()=>reject(new Error("AUTH_TIMEOUT")),AUTH_TIMEOUT_MS)),
+]);
+const authMessage=(error:unknown)=>{
+  const message=error instanceof Error?error.message:String(error||"");
+  if(message==="AUTH_TIMEOUT")return "Сервер авторизации отвечает слишком долго. Повторите попытку через минуту.";
+  if(/email rate limit exceeded/i.test(message))return "Лимит писем временно исчерпан. Повторите попытку позже или обратитесь к администратору.";
+  if(/error sending confirmation email|smtp|send.*email/i.test(message))return "Не удалось отправить письмо подтверждения. Проверьте адрес или повторите попытку позже.";
+  if(/user already registered/i.test(message))return "Аккаунт с этой почтой уже существует. Войдите или восстановите пароль.";
+  if(/invalid login credentials/i.test(message))return "Неверная почта или пароль.";
+  if(/email not confirmed/i.test(message))return "Почта ещё не подтверждена. Откройте письмо регистрации.";
+  return message||"Не удалось выполнить запрос авторизации.";
+};
+
 export function AuthScreen({ supabaseUrl = "", supabaseKey = "" }: { supabaseUrl?: string; supabaseKey?: string } = {}) {
-  const params=useSearchParams();const router=useRouter();const invited=Boolean(params.get("invitation"));
+  const params=useSearchParams();const invited=Boolean(params.get("invitation"));
   const [mode, setMode] = useState<"login" | "signup" | "forgot">(invited?"signup":"login");
   const [error, setError] = useState(()=>params.get("auth_error")||params.get("authError")?"Ссылка входа недействительна или устарела. Запросите новую.":"");
   const [success,setSuccess]=useState("");
@@ -15,22 +31,29 @@ export function AuthScreen({ supabaseUrl = "", supabaseKey = "" }: { supabaseUrl
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); if(busy)return; setBusy(true); setError("");setSuccess("");
     const form = new FormData(e.currentTarget);
-    const email = String(form.get("email")||""); const password = String(form.get("password")||"");
-    if(mode==="forgot"){
-      const{error:resetError}=await createClient(supabaseUrl,supabaseKey).auth.resetPasswordForEmail(email,{redirectTo:`${window.location.origin}/auth/callback?next=/reset-password`});
-      setBusy(false);if(resetError)return setError(resetError.message);
-      setSuccess("Если аккаунт существует, ссылка для восстановления отправлена на почту.");return;
-    }
-    if(mode==="signup"){
-      const response=await fetch("/api/auth/signup",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password,fullName:String(form.get("name")||"")})});
-      const body=await response.json();setBusy(false);
-      if(!response.ok)return setError(body.error||"Не удалось зарегистрироваться.");
-      if(body.confirmationRequired)return setSuccess("Регистрация создана. Откройте письмо и подтвердите почту — ссылка вернёт вас на главную страницу.");
-      router.replace("/");router.refresh();return;
-    }
-    const result=await createClient(supabaseUrl, supabaseKey).auth.signInWithPassword({ email, password });
-    setBusy(false);if(result.error)return setError(result.error.message);
-    window.location.reload();
+    const email = String(form.get("email")||"").trim().toLowerCase(); const password = String(form.get("password")||"");
+    try{
+      const supabase=createClient(supabaseUrl,supabaseKey);
+      if(mode==="forgot"){
+        const{error:resetError}=await withTimeout(supabase.auth.resetPasswordForEmail(email,{redirectTo:`${window.location.origin}/auth/callback?next=/reset-password`}));
+        if(resetError)throw resetError;
+        setSuccess("Если аккаунт существует, ссылка для восстановления отправлена на почту.");return;
+      }
+      if(mode==="signup"){
+        const fullName=String(form.get("name")||"").trim();
+        const{data,error:signupError}=await withTimeout(supabase.auth.signUp({email,password,options:{data:{full_name:fullName},emailRedirectTo:`${window.location.origin}/auth/callback?next=/`}}));
+        if(signupError)throw signupError;
+        const isNew=Boolean(data.user?.identities?.length);
+        if(!isNew)throw new Error("User already registered");
+        if(data.user?.id)void fetch("/api/auth/signup",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({userId:data.user.id})}).catch(()=>undefined);
+        if(!data.session){setSuccess("Регистрация создана. Откройте письмо и подтвердите почту — ссылка вернёт вас на главную страницу.");return}
+        window.location.replace("/");return;
+      }
+      const result=await withTimeout(supabase.auth.signInWithPassword({ email, password }));
+      if(result.error)throw result.error;
+      window.location.replace("/");
+    }catch(authError){setError(authMessage(authError))}
+    finally{setBusy(false)}
   }
   const resetMode=(next:"login"|"signup"|"forgot")=>{setError("");setSuccess("");setMode(next)};
   const title=mode==="forgot"?"Восстановить доступ":mode==="login"?"С возвращением":"Создать пространство";
