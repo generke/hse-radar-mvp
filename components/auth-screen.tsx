@@ -41,9 +41,12 @@ export function AuthScreen(props: { supabaseUrl?: string; supabaseKey?: string }
       }
       if(mode==="signup"){
         const response=await withTimeout(fetch("/api/auth/signup",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password,fullName:String(form.get("name")||"").trim()})}));
-        const body=await response.json().catch(()=>({})) as {error?:string};
+        const body=await response.json().catch(()=>({})) as {error?:string;confirmationRequired?:boolean};
         if(!response.ok)throw new Error(body.error||"Не удалось зарегистрироваться.");
-        setSuccess("Регистрация создана. Откройте письмо и подтвердите почту — ссылка вернёт вас на главную страницу.");return;
+        if(body.confirmationRequired){setSuccess("Регистрация создана. Откройте письмо и подтвердите почту — ссылка вернёт вас на главную страницу.");return}
+        const login=await withTimeout(fetch("/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password})}));
+        if(!login.ok){const result=await login.json().catch(()=>({})) as {error?:string};throw new Error(result.error||"Аккаунт создан. Выполните вход.")}
+        window.location.replace("/");return;
       }
       const response=await withTimeout(fetch("/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password})}));
       const body=await response.json().catch(()=>({})) as {error?:string};
