@@ -11,7 +11,7 @@ const almatyDate=()=>{
 };
 
 export async function GET(){
-  return NextResponse.json({configured:Boolean(process.env.RESEND_API_KEY&&process.env.EMAIL_FROM)});
+  return NextResponse.json({mode:process.env.RESEND_API_KEY&&process.env.EMAIL_FROM?"email_confirmation":"direct"});
 }
 
 export async function POST(request:NextRequest){
@@ -24,44 +24,48 @@ export async function POST(request:NextRequest){
     const website=String(body.website||"").trim();
     if(website)return NextResponse.json({ok:true,confirmationRequired:true},{status:202});
     if(!/^\S+@\S+\.\S+$/.test(email)||password.length<8||!fullName)return NextResponse.json({error:"Проверьте имя, почту и пароль."},{status:400});
-    if(!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM){
-      console.warn("auth.signup.email_provider_missing");
-      return NextResponse.json({error:"Регистрация временно недоступна: почтовый сервис не настроен. Вход существующих пользователей работает."},{status:503});
-    }
     if(!await checkAuthEmailRateLimit(request,email,"signup"))return NextResponse.json({error:"Слишком много попыток. Подождите 10 минут и повторите."},{status:429,headers:{"Retry-After":"600"}});
 
     const admin=createAdminClient();
     const site=(process.env.NEXT_PUBLIC_SITE_URL||request.nextUrl.origin).replace(/\/$/,"");
+    const emailDeliveryConfigured=Boolean(process.env.RESEND_API_KEY&&process.env.EMAIL_FROM);
     const {data:profile}=await admin.from("profiles").select("id").ilike("email",email).maybeSingle();
     let isNew=!profile?.id;
-    let linkResult;
+    let userId="";
+    let confirmationUrl="";
     if(profile?.id){
       const existing=await admin.auth.admin.getUserById(profile.id);
       if(existing.error)throw existing.error;
       if(existing.data.user.email_confirmed_at)return NextResponse.json({error:"Этот адрес уже зарегистрирован. Используйте вход или восстановление пароля."},{status:409});
-      const updated=await admin.auth.admin.updateUserById(profile.id,{password,user_metadata:{...existing.data.user.user_metadata,full_name:fullName}});
+      const updated=await admin.auth.admin.updateUserById(profile.id,{password,email_confirm:!emailDeliveryConfigured,user_metadata:{...existing.data.user.user_metadata,full_name:fullName},app_metadata:{...existing.data.user.app_metadata,...(!emailDeliveryConfigured?{email_verification:"deferred"}:{})}});
       if(updated.error)throw updated.error;
-      linkResult=await admin.auth.admin.generateLink({type:"magiclink",email});
+      userId=profile.id;
+      if(emailDeliveryConfigured){
+        const link=await admin.auth.admin.generateLink({type:"magiclink",email});
+        if(link.error)throw link.error;
+        confirmationUrl=`${site}/auth/callback?token_hash=${encodeURIComponent(link.data.properties.hashed_token)}&type=${encodeURIComponent(link.data.properties.verification_type)}&next=/`;
+      }
       isNew=false;
+    }else if(emailDeliveryConfigured){
+      const link=await admin.auth.admin.generateLink({type:"signup",email,password,options:{data:{full_name:fullName}}});
+      if(link.error)throw link.error;
+      userId=link.data.user.id;
+      confirmationUrl=`${site}/auth/callback?token_hash=${encodeURIComponent(link.data.properties.hashed_token)}&type=${encodeURIComponent(link.data.properties.verification_type)}&next=/`;
     }else{
-      linkResult=await admin.auth.admin.generateLink({type:"signup",email,password,options:{data:{full_name:fullName}}});
+      const created=await admin.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{full_name:fullName},app_metadata:{email_verification:"deferred"}});
+      if(created.error)throw created.error;
+      userId=created.data.user.id;
     }
-    if(linkResult.error){
-      console.warn("auth.signup.link_rejected",{code:linkResult.error.code,status:linkResult.error.status});
-      return NextResponse.json({error:"Не удалось создать ссылку подтверждения. Повторите попытку."},{status:400});
+    if(emailDeliveryConfigured){
+      const delivery=await sendTransactionalEmail({to:email,subject:"Подтвердите регистрацию в HSE Radar",heading:"Подтвердите электронную почту",body:"Нажмите кнопку, чтобы завершить регистрацию и открыть рабочее пространство.",actionLabel:"Подтвердить и продолжить",actionUrl:confirmationUrl});
+      if(!delivery.ok){
+        console.error("auth.signup.confirmation_delivery_failed",{error:delivery.error,skipped:delivery.skipped});
+        if(isNew)await admin.auth.admin.deleteUser(userId,true).catch(cleanupError=>console.error("auth.signup.rollback_failed",cleanupError));
+        return NextResponse.json({error:"Не удалось доставить письмо подтверждения. Попробуйте ещё раз через несколько минут."},{status:503});
+      }
     }
-
-    const user=linkResult.data.user;
-    const properties=linkResult.data.properties;
-    const confirmationUrl=`${site}/auth/callback?token_hash=${encodeURIComponent(properties.hashed_token)}&type=${encodeURIComponent(properties.verification_type)}&next=/`;
-    const delivery=await sendTransactionalEmail({to:email,subject:"Подтвердите регистрацию в HSE Radar",heading:"Подтвердите электронную почту",body:"Нажмите кнопку, чтобы завершить регистрацию и открыть рабочее пространство.",actionLabel:"Подтвердить и продолжить",actionUrl:confirmationUrl});
-    if(!delivery.ok){
-      console.error("auth.signup.confirmation_delivery_failed",{error:delivery.error,skipped:delivery.skipped});
-      if(isNew)await admin.auth.admin.deleteUser(user.id,true).catch(cleanupError=>console.error("auth.signup.rollback_failed",cleanupError));
-      return NextResponse.json({error:"Не удалось доставить письмо подтверждения. Попробуйте ещё раз через несколько минут."},{status:503});
-    }
-    if(isNew)await notifyAdministrators(admin,user.id,fullName,email,site);
-    return NextResponse.json({ok:true,confirmationRequired:true});
+    if(isNew)await notifyAdministrators(admin,userId,fullName,email,site);
+    return NextResponse.json({ok:true,confirmationRequired:emailDeliveryConfigured});
   }catch(error){
     console.error("auth.signup.failed",{error:error instanceof Error?error.message:String(error)});
     return NextResponse.json({error:"Не удалось зарегистрироваться. Повторите попытку."},{status:500});
