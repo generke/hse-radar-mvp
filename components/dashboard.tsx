@@ -37,18 +37,34 @@ export type AdminAccessUser = { organization_id:string; organization_name:string
 type Workspace = { id:string; name:string; role:string; plan:string; subscription_status:string; section_permissions?:SectionKey[] };
 type Props = { demo?: boolean; initialTab?:Tab; supabaseUrl?: string; supabaseKey?: string; userEmail?: string; userId?:string; organizationId?: string; organizationName?: string; role?: string; plan?: string; initialData?: Data; configurationError?: string; isPlatformAdmin?: boolean; kaspiPayUrl?: string; paymentRequests?: PaymentRequest[]; adminOrganizations?: AdminOrganization[]; adminAccessUsers?:AdminAccessUser[]; workspaces?:Workspace[]; sectionPermissions?:SectionKey[]; tasks?:TaskItem[]; members?:TeamMember[]; auditEvents?:AuditEvent[]; learningCourses?:LearningCourse[]; learningAttempts?:LearningAttempt[]; learningAssignments?:LearningAssignment[]; visionCameras?:VisionCamera[]; visionEvents?:VisionEvent[]; jobProfiles?:JobProfile[]; notifications?:UserNotification[]; trainingTypes?:DirectoryItem[]; documentCategories?:DirectoryItem[] };
 
-const nav: { id: Tab; label: string; icon: string }[] = [
-  { id: "overview", label: "Оперативный центр", icon: "⌁" },
-  { id:"tasks",label:"Задачи",icon:"✓" },
-  { id: "documents", label: "Документы", icon: "▤" },
-  { id: "positions", label: "Должности", icon: "▦" },
-  { id: "employees", label: "Работники", icon: "◯" },
-  { id:"team",label:"Руководители",icon:"◌" },
-  { id:"learning",label:"Обучение",icon:"◫" },
-  { id: "tmc", label: "ТМЦ", icon: "◇" },
-  { id:"vision",label:"Safety Vision",icon:"◎" },
-  { id: "billing", label: "Тариф и оплата", icon: "◫" },
+type NavItem={id:Tab;label:string;icon:string};
+type NavGroupId="control"|"people"|"assets"|"documents"|"administration";
+type NavGroup={id:NavGroupId;label:string;icon:string;items:NavItem[]};
+const overviewNav:NavItem={id:"overview",label:"Оперативный центр",icon:"⌁"};
+const navGroups:NavGroup[]=[
+  {id:"control",label:"Контроль",icon:"◎",items:[
+    {id:"tasks",label:"Задачи",icon:"✓"},
+    {id:"vision",label:"Safety Vision",icon:"◉"},
+  ]},
+  {id:"people",label:"Люди",icon:"◯",items:[
+    {id:"employees",label:"Работники",icon:"◯"},
+    {id:"positions",label:"Должности",icon:"▦"},
+    {id:"learning",label:"Обучение",icon:"◫"},
+  ]},
+  {id:"assets",label:"Объекты и имущество",icon:"◇",items:[
+    {id:"tmc",label:"ТМЦ",icon:"◇"},
+  ]},
+  {id:"documents",label:"Документы и отчёты",icon:"▤",items:[
+    {id:"documents",label:"Документы",icon:"▤"},
+  ]},
+  {id:"administration",label:"Администрирование",icon:"⚙",items:[
+    {id:"team",label:"Руководители",icon:"◌"},
+    {id:"billing",label:"Тариф и оплата",icon:"◫"},
+    {id:"audit",label:"Журнал действий",icon:"⌁"},
+    {id:"admin",label:"Управление платформой",icon:"◆"},
+  ]},
 ];
+const groupForTab=(tab:Tab)=>navGroups.find(group=>group.items.some(item=>item.id===tab))?.id;
 
 const iso = (offset: number) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toISOString().slice(0, 10) };
 const seed: Data = { employees: [
@@ -72,14 +88,19 @@ function PaymentStatus({ value }: { value: string }) { const tone=value==='appro
 export function Dashboard({ demo = false, initialTab="overview", supabaseUrl = "", supabaseKey = "", userEmail = "developer@hseradar.kz", userId="", organizationId, organizationName = "HSE Radar Demo", role = "owner", plan = "free", initialData, configurationError, isPlatformAdmin = false, kaspiPayUrl = "", paymentRequests = [], adminOrganizations = [], adminAccessUsers=[], workspaces=[], sectionPermissions=[], tasks=[], members=[], auditEvents=[], learningCourses=[], learningAttempts=[], learningAssignments=[], visionCameras=[], visionEvents=[], jobProfiles=[],notifications=[],trainingTypes=[],documentCategories=[] }: Props) {
   const router=useRouter();
   const [tab, setTab] = useState<Tab>(initialTab); const [data, setData] = useState<Data>(initialData || seed); const [menu, setMenu] = useState(false);
+  const [openNavGroups,setOpenNavGroups]=useState<Set<NavGroupId>>(()=>{const active=groupForTab(initialTab);return new Set(active?[active]:[])});
   const [editor, setEditor] = useState<{ kind: Kind; item?: Row; category?: string } | null>(null); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(configurationError || ""); const [paymentReference, setPaymentReference] = useState("");
   const [importOpen,setImportOpen]=useState(false);const[documentOpen,setDocumentOpen]=useState(false);const[documentFile,setDocumentFile]=useState<File|null>(null);const[documentEditing,setDocumentEditing]=useState<Row|null>(null);const[categoryItems,setCategoryItems]=useState(documentCategories);const[quickAdd,setQuickAdd]=useState<"menu"|"task"|"learning"|null>(null);
   useEffect(() => { if (!demo) return; const saved = localStorage.getItem("hse-radar-next-demo"); if (saved) queueMicrotask(() => { try { setData(JSON.parse(saved)) } catch {} }); }, [demo]);
   useEffect(() => { if (demo) localStorage.setItem("hse-radar-next-demo", JSON.stringify(data)) }, [data, demo]);
   useEffect(()=>{document.body.classList.toggle("overlay-open",menu||Boolean(editor)||importOpen||documentOpen||Boolean(quickAdd));return()=>document.body.classList.remove("overlay-open")},[menu,editor,importOpen,documentOpen,quickAdd]);
   const sectionUrl=(section:Tab,org=organizationId)=>{const query=new URLSearchParams();if(org)query.set("org",org);query.set("section",section);return `/?${query.toString()}`};
-  const go=(section:Tab,org=organizationId)=>{setMenu(false);if(demo){setTab(section);return}router.push(sectionUrl(section,org))};
+  const go=(section:Tab,org=organizationId)=>{const group=groupForTab(section);if(group)setOpenNavGroups(current=>new Set(current).add(group));setMenu(false);if(demo){setTab(section);return}router.push(sectionUrl(section,org))};
   const canSection=(section:string)=>section==="admin"||section==="audit"?isPlatformAdmin:isPlatformAdmin||role==="owner"||sectionPermissions.includes(section as SectionKey)||(section==="tmc"&&(sectionPermissions.includes("inventory" as SectionKey)||sectionPermissions.includes("ppe" as SectionKey)));
+  const visibleNavGroups=navGroups.map(group=>({...group,items:group.items.filter(item=>canSection(item.id))})).filter(group=>group.items.length);
+  const activeNavGroup=visibleNavGroups.find(group=>group.items.some(item=>item.id===tab));
+  const toggleNavGroup=(id:NavGroupId)=>setOpenNavGroups(current=>{const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next});
+  const openMobileGroup=(id:NavGroupId)=>{setOpenNavGroups(current=>new Set(current).add(id));setMenu(true)};
   const canManageModule=(section:SectionKey)=>isPlatformAdmin||role==="owner"||(["hse","manager","hr"].includes(role)&&canSection(section));
   const hasUnlimitedAccess = isPlatformAdmin || !["trial","free"].includes(plan);
   const trialFull = (kind: Kind) => !hasUnlimitedAccess && (kind==="inventory"||kind==="ppe"?data.inventory.length+data.ppe.length:data[kind].length) >= 5;
@@ -113,8 +134,19 @@ export function Dashboard({ demo = false, initialTab="overview", supabaseUrl = "
   return <div className="app-shell">
     {demo && <div className="demo-bar">ДЕМО-РЕЖИМ · данные сохраняются только в этом браузере</div>}
     {menu&&<button className="sidebar-dismiss" aria-label="Закрыть меню" onClick={()=>setMenu(false)}/>}
-    <aside className={menu ? "sidebar open" : "sidebar"} onClick={event=>event.stopPropagation()}><RadarLogo onClick={()=>go("overview")}/><p className="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav>{[...nav,...(isPlatformAdmin?[{id:"audit" as Tab,label:"Журнал действий",icon:"⌁"},{id:"admin" as Tab,label:"Управление платформой",icon:"◆"}]:[])].filter(n=>canSection(n.id)).map(n => <button type="button" key={n.id} className={tab === n.id ? "nav-item active" : "nav-item"} onPointerEnter={()=>{if(!demo)router.prefetch(sectionUrl(n.id))}} onFocus={()=>{if(!demo)router.prefetch(sectionUrl(n.id))}} onClick={() => go(n.id)}><span>{n.icon}</span>{n.label}</button>)}</nav><div className="account"><div className="avatar">{userEmail?.slice(0,2).toUpperCase()}</div><div><strong>{userEmail?.split("@")[0]}</strong><small>{isPlatformAdmin ? "Administrator" : plan === "pro" ? "Pro" : "Free"}</small></div><button type="button" onClick={logout} title="Выйти">↗</button></div></aside>
-    <main className="workspace"><header><button type="button" className="mobile-menu" onClick={() => setMenu(true)}>☰</button><div>{workspaces.length>1?<select className="workspace-switcher" value={organizationId} onChange={e=>go("overview",e.target.value)}>{workspaces.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>:<span className="header-org">{organizationName}</span>}<small>{demo ? "Локальное пространство" : "Защищено Supabase RLS"}</small></div><div className="header-actions"><NotificationCenter initial={notifications} organizationId={organizationId||""} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey}/><LanguageSwitcher/></div></header>
+    <aside className={menu ? "sidebar open" : "sidebar"} onClick={event=>event.stopPropagation()}>
+      <RadarLogo onClick={()=>go("overview")}/><p className="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</p>
+      <nav className="sidebar-navigation">
+        {canSection(overviewNav.id)&&<button type="button" className={tab===overviewNav.id?"nav-item active":"nav-item"} onPointerEnter={()=>{if(!demo)router.prefetch(sectionUrl(overviewNav.id))}} onFocus={()=>{if(!demo)router.prefetch(sectionUrl(overviewNav.id))}} onClick={()=>go(overviewNav.id)}><span>{overviewNav.icon}</span>{overviewNav.label}</button>}
+        {visibleNavGroups.map(group=>{const expanded=openNavGroups.has(group.id);const groupActive=group.items.some(item=>item.id===tab);return <section className={groupActive?"nav-group active":"nav-group"} key={group.id}>
+          <button type="button" className="nav-group-trigger" aria-expanded={expanded} aria-controls={`nav-group-${group.id}`} onClick={()=>toggleNavGroup(group.id)}><span>{group.icon}</span><b>{group.label}</b><i aria-hidden="true">⌄</i></button>
+          <div id={`nav-group-${group.id}`} className={expanded?"nav-group-items open":"nav-group-items"}>{group.items.map(item=><button type="button" key={item.id} className={tab===item.id?"nav-item nav-child active":"nav-item nav-child"} onPointerEnter={()=>{if(!demo)router.prefetch(sectionUrl(item.id))}} onFocus={()=>{if(!demo)router.prefetch(sectionUrl(item.id))}} onClick={()=>go(item.id)}><span>{item.icon}</span>{item.label}</button>)}</div>
+        </section>})}
+      </nav>
+      <div className="account"><div className="avatar">{userEmail?.slice(0,2).toUpperCase()}</div><div><strong>{userEmail?.split("@")[0]}</strong><small>{isPlatformAdmin ? "Administrator" : plan === "pro" ? "Pro" : "Free"}</small></div><button type="button" onClick={logout} title="Выйти">↗</button></div>
+    </aside>
+    <main className="workspace"><header><button type="button" className="mobile-menu" aria-label="Открыть меню" onClick={() => setMenu(true)}>☰</button><div>{workspaces.length>1?<select className="workspace-switcher" value={organizationId} onChange={e=>go("overview",e.target.value)}>{workspaces.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>:<span className="header-org">{organizationName}</span>}<small>{demo ? "Локальное пространство" : "Защищено Supabase RLS"}</small></div><div className="header-actions"><NotificationCenter initial={notifications} organizationId={organizationId||""} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey}/><LanguageSwitcher/></div></header>
+      {activeNavGroup&&<section className="module-context" aria-label="Разделы модуля"><div><span>Модуль</span><strong>{activeNavGroup.label}</strong></div><nav>{activeNavGroup.items.map(item=><button type="button" key={item.id} className={tab===item.id?"active":""} onClick={()=>go(item.id)}>{item.label}</button>)}</nav></section>}
       {notice && <div className="toast"><span>{notice}</span><button onClick={() => setNotice("")}>×</button></div>}
       {tab === "overview" && <OperationalOverview employeeCount={data.employees.length} risks={risks} extraDeadlines={extraDeadlines} tasks={tasks} assignments={learningAssignments} visionEvents={visionEvents} members={members} canOpen={canSection} add={() => setQuickAdd("menu")} open={(section) => go(section as Tab)} />}
       {tab === "employees" && <ListPage title="Работники" eyebrow="РЕЕСТР И ДОПУСКИ" addLabel="Добавить сотрудника" onAdd={() => openEditor("employees")} extra={<button className="button secondary" onClick={()=>setImportOpen(true)}>↑ Импорт из Excel</button>}><EmployeeTable rows={data.employees} busy={busy} edit={item => openEditor("employees",item)} remove={id => remove("employees",id)} bulkRemove={ids=>bulkRemove("employees",ids)} /></ListPage>}
@@ -128,7 +160,9 @@ export function Dashboard({ demo = false, initialTab="overview", supabaseUrl = "
       {tab === "audit" && isPlatformAdmin && <AuditPanel events={auditEvents} members={members}/>}
       {tab === "billing" && <Billing plan={plan} unlimited={hasUnlimitedAccess} isPlatformAdmin={isPlatformAdmin} data={data} kaspiPayUrl={kaspiPayUrl} paymentReference={paymentReference} setPaymentReference={setPaymentReference} submit={submitPaymentRequest} busy={busy} pending={paymentRequests.some(x=>x.organization_id===organizationId&&x.status==="pending")} />}
       {tab === "admin" && isPlatformAdmin && <AdminPanel organizations={adminOrganizations} requests={paymentRequests} accessUsers={adminAccessUsers} currentUserId={userId} busy={busy} review={reviewPayment} />}
-    </main>{editor && <Editor kind={editor.kind} item={editor.item} category={editor.category} busy={busy} close={() => setEditor(null)} save={saveEditor} employees={data.employees} jobProfiles={jobProfiles}/>}
+    </main>
+    <nav className="mobile-dock" aria-label="Основная навигация">{canSection("overview")&&<button type="button" className={tab==="overview"?"active":""} onClick={()=>go("overview")}><span>⌁</span>Центр</button>}{visibleNavGroups.some(group=>group.id==="control")&&<button type="button" className={activeNavGroup?.id==="control"?"active":""} onClick={()=>openMobileGroup("control")}><span>◎</span>Контроль</button>}{visibleNavGroups.some(group=>group.id==="people")&&<button type="button" className={activeNavGroup?.id==="people"?"active":""} onClick={()=>openMobileGroup("people")}><span>◯</span>Люди</button>}{visibleNavGroups.some(group=>group.id==="assets")&&<button type="button" className={activeNavGroup?.id==="assets"?"active":""} onClick={()=>openMobileGroup("assets")}><span>◇</span>Объекты</button>}{visibleNavGroups.some(group=>group.id==="documents"||group.id==="administration")&&<button type="button" className={["documents","administration"].includes(activeNavGroup?.id||"")?"active":""} onClick={()=>{const target=visibleNavGroups.find(group=>group.id==="documents")?.id||visibleNavGroups.find(group=>group.id==="administration")?.id;if(target)openMobileGroup(target)}}><span>•••</span>Ещё</button>}</nav>
+    {editor && <Editor kind={editor.kind} item={editor.item} category={editor.category} busy={busy} close={() => setEditor(null)} save={saveEditor} employees={data.employees} jobProfiles={jobProfiles}/>}
     {importOpen&&<EmployeeImport close={()=>setImportOpen(false)} submit={importEmployees} limit={hasUnlimitedAccess?undefined:Math.max(0,5-data.employees.length)}/>}
     {documentOpen&&<DocumentUpload file={documentFile} item={documentEditing||undefined} categories={categoryItems} busy={busy} close={closeDocument} choose={chooseDocument} save={uploadDocument}/>}
     {quickAdd&&<QuickAddDialog mode={quickAdd} busy={busy} close={()=>setQuickAdd(null)} open={openQuick} createTask={createQuickTask} createLearning={createQuickLearning} employees={data.employees} members={members}/>}

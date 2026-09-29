@@ -72,6 +72,19 @@ Object.assign(d,{
 "Если аккаунт существует, ссылка для восстановления отправлена на почту.":{kk:"Егер аккаунт бар болса, қалпына келтіру сілтемесі поштаға жіберілді.",en:"If the account exists, a recovery link has been sent by email."},
 "Регистрация создана. Откройте письмо и подтвердите почту — ссылка вернёт вас на главную страницу.":{kk:"Тіркелу жасалды. Хатты ашып, поштаны растаңыз — сілтеме сізді басты бетке қайтарады.",en:"Registration is complete. Open the email and confirm your address; the link will return you to the home page."}
 });
+Object.assign(d,{
+"Контроль":{kk:"Бақылау",en:"Control"},
+"Люди":{kk:"Адамдар",en:"People"},
+"Объекты и имущество":{kk:"Нысандар мен мүлік",en:"Sites and assets"},
+"Документы и отчёты":{kk:"Құжаттар мен есептер",en:"Documents and reports"},
+"Администрирование":{kk:"Әкімшілендіру",en:"Administration"},
+"Модуль":{kk:"Модуль",en:"Module"},
+"Разделы модуля":{kk:"Модуль бөлімдері",en:"Module sections"},
+"Основная навигация":{kk:"Негізгі навигация",en:"Primary navigation"},
+"Открыть меню":{kk:"Мәзірді ашу",en:"Open menu"},
+"Центр":{kk:"Орталық",en:"Center"},
+"Объекты":{kk:"Нысандар",en:"Sites"}
+});
 const source=new WeakMap<Node,string>();
 const rendered=new WeakMap<Node,string>();
 const entries=Object.entries(d).sort((a,b)=>b[0].length-a[0].length);
