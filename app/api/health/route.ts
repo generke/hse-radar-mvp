@@ -10,7 +10,7 @@ export async function GET() {
     if (error) throw error;
     const latencyMs=Date.now()-started;
     return NextResponse.json(
-      { status: "ok", database: "ok", latencyMs, timestamp: new Date().toISOString() },
+      { status: "ok", database: "ok", authentication: "ok", emailProviderConfigured:Boolean(process.env.RESEND_API_KEY&&process.env.EMAIL_FROM), latencyMs, timestamp: new Date().toISOString() },
       { headers: { "Server-Timing": `db;dur=${latencyMs}` } },
     );
   } catch (error) {

@@ -40,17 +40,14 @@ export function AuthScreen({ supabaseUrl = "", supabaseKey = "" }: { supabaseUrl
         setSuccess("Если аккаунт существует, ссылка для восстановления отправлена на почту.");return;
       }
       if(mode==="signup"){
-        const fullName=String(form.get("name")||"").trim();
-        const{data,error:signupError}=await withTimeout(supabase.auth.signUp({email,password,options:{data:{full_name:fullName},emailRedirectTo:`${window.location.origin}/auth/callback?next=/`}}));
-        if(signupError)throw signupError;
-        const isNew=Boolean(data.user?.identities?.length);
-        if(!isNew)throw new Error("User already registered");
-        if(data.user?.id)void fetch("/api/auth/signup",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({userId:data.user.id})}).catch(()=>undefined);
-        if(!data.session){setSuccess("Регистрация создана. Откройте письмо и подтвердите почту — ссылка вернёт вас на главную страницу.");return}
-        window.location.replace("/");return;
+        const response=await withTimeout(fetch("/api/auth/signup",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password,fullName:String(form.get("name")||"").trim()})}));
+        const body=await response.json().catch(()=>({})) as {error?:string};
+        if(!response.ok)throw new Error(body.error||"Не удалось зарегистрироваться.");
+        setSuccess("Регистрация создана. Откройте письмо и подтвердите почту — ссылка вернёт вас на главную страницу.");return;
       }
-      const result=await withTimeout(supabase.auth.signInWithPassword({ email, password }));
-      if(result.error)throw result.error;
+      const response=await withTimeout(fetch("/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password})}));
+      const body=await response.json().catch(()=>({})) as {error?:string};
+      if(!response.ok)throw new Error(body.error||"Не удалось выполнить вход.");
       window.location.replace("/");
     }catch(authError){setError(authMessage(authError))}
     finally{setBusy(false)}
