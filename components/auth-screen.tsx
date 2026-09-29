@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { RadarLogo } from "./logo";
 import { LanguageSwitcher } from "./language-provider";
 
@@ -22,7 +21,8 @@ const authMessage=(error:unknown)=>{
   return message||"Не удалось выполнить запрос авторизации.";
 };
 
-export function AuthScreen({ supabaseUrl = "", supabaseKey = "" }: { supabaseUrl?: string; supabaseKey?: string } = {}) {
+export function AuthScreen(props: { supabaseUrl?: string; supabaseKey?: string } = {}) {
+  void props;
   const params=useSearchParams();const invited=Boolean(params.get("invitation"));
   const [mode, setMode] = useState<"login" | "signup" | "forgot">(invited?"signup":"login");
   const [error, setError] = useState(()=>params.get("auth_error")||params.get("authError")?"Ссылка входа недействительна или устарела. Запросите новую.":"");
@@ -33,11 +33,11 @@ export function AuthScreen({ supabaseUrl = "", supabaseKey = "" }: { supabaseUrl
     const form = new FormData(e.currentTarget);
     const email = String(form.get("email")||"").trim().toLowerCase(); const password = String(form.get("password")||"");
     try{
-      const supabase=createClient(supabaseUrl,supabaseKey);
       if(mode==="forgot"){
-        const{error:resetError}=await withTimeout(supabase.auth.resetPasswordForEmail(email,{redirectTo:`${window.location.origin}/auth/callback?next=/reset-password`}));
-        if(resetError)throw resetError;
-        setSuccess("Если аккаунт существует, ссылка для восстановления отправлена на почту.");return;
+        const response=await withTimeout(fetch("/api/auth/recovery",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email})}));
+        const body=await response.json().catch(()=>({})) as {error?:string;message?:string};
+        if(!response.ok)throw new Error(body.error||"Не удалось отправить письмо.");
+        setSuccess(body.message||"Если аккаунт существует, ссылка для восстановления отправлена на почту.");return;
       }
       if(mode==="signup"){
         const response=await withTimeout(fetch("/api/auth/signup",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,password,fullName:String(form.get("name")||"").trim()})}));
