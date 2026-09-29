@@ -49,6 +49,29 @@ Object.assign(d,{
 "Telegram и каналы уведомлений":{kk:"Telegram және хабарландыру арналары",en:"Telegram and notification channels"},"Уведомления включены":{kk:"Хабарландырулар қосулы",en:"Notifications enabled"},"Уведомления выключены":{kk:"Хабарландырулар өшірулі",en:"Notifications disabled"},"Выбрать событие":{kk:"Оқиғаны таңдау",en:"Select event"},"Выбрать задачу":{kk:"Тапсырманы таңдау",en:"Select task"},"Выбрать обучение":{kk:"Оқытуды таңдау",en:"Select learning assignment"},"Выбрать сотрудника":{kk:"Қызметкерді таңдау",en:"Select employee"},"Выбрать документ":{kk:"Құжатты таңдау",en:"Select document"},"Выбрать ТМЦ":{kk:"ТМҚ таңдау",en:"Select asset"},
 "Выбранные записи удалены":{kk:"Таңдалған жазбалар жойылды",en:"Selected records deleted"},"Выбранные задачи выполнены":{kk:"Таңдалған тапсырмалар орындалды",en:"Selected tasks completed"},"Выбранные назначения завершены":{kk:"Таңдалған тағайындаулар аяқталды",en:"Selected assignments completed"},"Выбранные события устранены":{kk:"Таңдалған оқиғалар жойылды",en:"Selected events resolved"}
 });
+Object.assign(d,{
+"Новая организация":{kk:"Жаңа ұйым",en:"New organization"},
+"Вернуться ко входу":{kk:"Кіруге оралу",en:"Back to sign in"},
+"Восстановить доступ":{kk:"Қолжетімділікті қалпына келтіру",en:"Recover access"},
+"ПРИГЛАШЕНИЕ В ОРГАНИЗАЦИЮ":{kk:"ҰЙЫМҒА ШАҚЫРУ",en:"ORGANIZATION INVITATION"},
+"ВОССТАНОВЛЕНИЕ ПАРОЛЯ":{kk:"ҚҰПИЯСӨЗДІ ҚАЛПЫНА КЕЛТІРУ",en:"PASSWORD RECOVERY"},
+"Создайте аккаунт":{kk:"Аккаунт жасаңыз",en:"Create your account"},
+"После регистрации откроются разделы, назначенные руководителем.":{kk:"Тіркелгеннен кейін жетекші тағайындаған бөлімдер ашылады.",en:"After sign-up, the sections assigned by your manager will become available."},
+"Отправим безопасную ссылку на рабочую почту.":{kk:"Жұмыс поштаңызға қауіпсіз сілтеме жібереміз.",en:"We will send a secure link to your work email."},
+"Забыли пароль?":{kk:"Құпиясөзді ұмыттыңыз ба?",en:"Forgot password?"},
+"Отправить ссылку":{kk:"Сілтемені жіберу",en:"Send link"},
+"Подождите…":{kk:"Күте тұрыңыз…",en:"Please wait…"},
+"Ссылка входа недействительна или устарела. Запросите новую.":{kk:"Кіру сілтемесі жарамсыз немесе ескірген. Жаңасын сұраңыз.",en:"The sign-in link is invalid or expired. Request a new one."},
+"Сервер авторизации отвечает слишком долго. Повторите попытку через минуту.":{kk:"Авторизация сервері тым ұзақ жауап беруде. Бір минуттан кейін қайталап көріңіз.",en:"The authentication server is taking too long to respond. Try again in a minute."},
+"Лимит писем временно исчерпан. Повторите попытку позже или обратитесь к администратору.":{kk:"Хат жіберу лимиті уақытша таусылды. Кейінірек қайталап көріңіз немесе әкімшіге хабарласыңыз.",en:"The email limit has been reached temporarily. Try again later or contact the administrator."},
+"Не удалось отправить письмо подтверждения. Проверьте адрес или повторите попытку позже.":{kk:"Растау хатын жіберу мүмкін болмады. Мекенжайды тексеріңіз немесе кейінірек қайталап көріңіз.",en:"The confirmation email could not be sent. Check the address or try again later."},
+"Аккаунт с этой почтой уже существует. Войдите или восстановите пароль.":{kk:"Бұл поштаға тіркелген аккаунт бар. Кіріңіз немесе құпиясөзді қалпына келтіріңіз.",en:"An account with this email already exists. Sign in or reset the password."},
+"Неверная почта или пароль.":{kk:"Пошта немесе құпиясөз қате.",en:"Incorrect email or password."},
+"Почта ещё не подтверждена. Откройте письмо регистрации.":{kk:"Пошта әлі расталмаған. Тіркелу хатын ашыңыз.",en:"The email has not been confirmed yet. Open the registration email."},
+"Не удалось выполнить запрос авторизации.":{kk:"Авторизация сұрауын орындау мүмкін болмады.",en:"The authentication request could not be completed."},
+"Если аккаунт существует, ссылка для восстановления отправлена на почту.":{kk:"Егер аккаунт бар болса, қалпына келтіру сілтемесі поштаға жіберілді.",en:"If the account exists, a recovery link has been sent by email."},
+"Регистрация создана. Откройте письмо и подтвердите почту — ссылка вернёт вас на главную страницу.":{kk:"Тіркелу жасалды. Хатты ашып, поштаны растаңыз — сілтеме сізді басты бетке қайтарады.",en:"Registration is complete. Open the email and confirm your address; the link will return you to the home page."}
+});
 const source=new WeakMap<Node,string>();
 const rendered=new WeakMap<Node,string>();
 const entries=Object.entries(d).sort((a,b)=>b[0].length-a[0].length);
