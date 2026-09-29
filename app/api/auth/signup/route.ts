@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyTelegramUsers, sendTransactionalEmail } from "@/lib/notifications/server";
+import { checkAuthEmailRateLimit } from "@/lib/auth/email-rate-limit";
 
 const sameOrigin=(request:NextRequest)=>!request.headers.get("origin")||request.headers.get("origin")===request.nextUrl.origin;
 const almatyDate=()=>{
@@ -9,6 +10,10 @@ const almatyDate=()=>{
   return `${value("year")}-${value("month")}-${value("day")}`;
 };
 
+export async function GET(){
+  return NextResponse.json({configured:Boolean(process.env.RESEND_API_KEY&&process.env.EMAIL_FROM)});
+}
+
 export async function POST(request:NextRequest){
   try{
     if(!sameOrigin(request))return NextResponse.json({error:"Недопустимый источник запроса."},{status:403});
@@ -16,11 +21,14 @@ export async function POST(request:NextRequest){
     const email=String(body.email||"").trim().toLowerCase();
     const password=String(body.password||"");
     const fullName=String(body.fullName||"").trim();
+    const website=String(body.website||"").trim();
+    if(website)return NextResponse.json({ok:true,confirmationRequired:true},{status:202});
     if(!/^\S+@\S+\.\S+$/.test(email)||password.length<8||!fullName)return NextResponse.json({error:"Проверьте имя, почту и пароль."},{status:400});
     if(!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM){
       console.warn("auth.signup.email_provider_missing");
       return NextResponse.json({error:"Регистрация временно недоступна: почтовый сервис не настроен. Вход существующих пользователей работает."},{status:503});
     }
+    if(!await checkAuthEmailRateLimit(request,email,"signup"))return NextResponse.json({error:"Слишком много попыток. Подождите 10 минут и повторите."},{status:429,headers:{"Retry-After":"600"}});
 
     const admin=createAdminClient();
     const site=(process.env.NEXT_PUBLIC_SITE_URL||request.nextUrl.origin).replace(/\/$/,"");
