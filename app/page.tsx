@@ -52,8 +52,9 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
   const membership=memberships.find(item=>item.organization_id===selected.id);
   const role=isPlatformAdmin?"platform_admin":membership?.role||"member";
   const permissions=isPlatformAdmin||role==="owner"?[...sectionKeys]:normalizePermissions(role,membership?.section_permissions);
+  const canAudit=isPlatformAdmin||role==="owner";
   const requested=params.section as Tab|undefined;
-  const activeSection:Tab=requested==="admin"&&isPlatformAdmin?"admin":requested==="audit"&&!isPlatformAdmin?"overview":requested&&sectionKeys.includes(requested as SectionKey)&&permissions.includes(requested as SectionKey)?requested:"overview";
+  const activeSection:Tab=requested==="admin"&&isPlatformAdmin?"admin":requested==="audit"&&!canAudit?"overview":requested&&sectionKeys.includes(requested as SectionKey)&&permissions.includes(requested as SectionKey)?requested:"overview";
   const overview=activeSection==="overview";
   const needEmployees=overview||["employees","tmc","learning","billing"].includes(activeSection);
   const needMembers=overview||["tasks","team","audit","admin"].includes(activeSection);
@@ -76,7 +77,7 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
     overview||activeSection==="documents"||activeSection==="billing"?supabase.from("documents").select(documentColumns).eq("organization_id",selected.id).is("archived_at",null).order("created_at",{ascending:false}):empty(),
     overview||activeSection==="tasks"?supabase.from("tasks").select(taskColumns).eq("organization_id",selected.id).is("archived_at",null).order("due_date"):empty(),
     needMembers?supabase.from("memberships").select("organization_id,user_id,role,section_permissions,is_active,created_at").eq("organization_id",selected.id).order("created_at"):empty(),
-    activeSection==="audit"&&isPlatformAdmin?supabase.from("audit_events").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}).limit(200):empty(),
+    activeSection==="audit"&&canAudit?supabase.from("audit_events").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}).limit(200):empty(),
     needPayments?supabase.from("payment_requests").select("id,organization_id,payment_reference,status,created_at,amount,billing_months,organizations(name,plan,subscription_status)").order("created_at",{ascending:false}).limit(isPlatformAdmin?100:10):empty(),
     activeSection==="admin"&&isPlatformAdmin?supabase.from("organizations").select("id,name,plan,subscription_status,subscription_expires_at,created_at").order("created_at",{ascending:false}):empty(),
     activeSection==="learning"?supabase.from("learning_courses").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}):empty(),
