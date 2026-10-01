@@ -14,7 +14,7 @@ export const sectionLabels:Record<SectionKey,string>={
 
 export const rolePermissionPresets:Record<string,SectionKey[]>={
   owner:[...sectionKeys],
-  hse:["overview","employees","positions","tmc","documents","tasks","learning","vision","audit"],
+  hse:["overview","employees","positions","tmc","documents","tasks","learning","vision"],
   hr:["overview","employees","documents","learning"],
   manager:["overview","employees","tasks","learning","vision"],
   member:["overview","tasks","learning"],
