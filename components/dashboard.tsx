@@ -101,7 +101,9 @@ export function Dashboard({ demo = false, initialTab="overview", supabaseUrl = "
   const activeNavGroup=visibleNavGroups.find(group=>group.items.some(item=>item.id===tab));
   const toggleNavGroup=(id:NavGroupId)=>setOpenNavGroups(current=>{const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next});
   const openMobileGroup=(id:NavGroupId)=>{setOpenNavGroups(current=>new Set(current).add(id));setMenu(true)};
-  const canManageModule=(section:SectionKey)=>isPlatformAdmin||role==="owner"||(["hse","manager","hr"].includes(role)&&canSection(section));
+  const canManageModule=(section:SectionKey)=>isPlatformAdmin||role==="owner"||canSection(section)&&(
+    role==="hse"||role==="manager"&&["tasks","learning","vision"].includes(section)||role==="hr"&&section==="employees"
+  );
   const hasUnlimitedAccess = isPlatformAdmin || !["trial","free"].includes(plan);
   const trialFull = (kind: Kind) => !hasUnlimitedAccess && (kind==="inventory"||kind==="ppe"?data.inventory.length+data.ppe.length:data[kind].length) >= 5;
   const openEditor = (kind: Kind, item?: Row, category?:string) => {
