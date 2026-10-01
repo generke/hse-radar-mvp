@@ -14,7 +14,7 @@ export type Permission=typeof permissions[number];
 const all=[...permissions] as Permission[];
 export const rolePermissions:Record<Role,readonly Permission[]>={
   owner:all,
-  hse:["employees.view","employees.manage","employees.import","requirements.assign","requirements.complete","requirements.verify","tasks.view","tasks.manage","documents.view","documents.manage","inventory.view","inventory.manage","audit.view"],
+  hse:["employees.view","employees.manage","employees.import","requirements.assign","requirements.complete","requirements.verify","tasks.view","tasks.manage","documents.view","documents.manage","inventory.view","inventory.manage"],
   manager:["employees.view","requirements.complete","requirements.verify","tasks.view","tasks.manage","documents.view","inventory.view"],
   hr:["employees.view","employees.manage","employees.import","tasks.view","documents.view"],
   member:["employees.view","requirements.complete","tasks.view","documents.view"],

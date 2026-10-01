@@ -15,6 +15,22 @@ begin
   if not exists(select 1 from pg_trigger where tgrelid='public.audit_events'::regclass and tgname='audit_events_immutable' and not tgisinternal) then
     raise exception 'immutable audit trigger missing';
   end if;
+  if not exists(
+    select 1 from pg_policies
+    where schemaname='public' and tablename='audit_events'
+      and policyname='audit owner read' and roles='{authenticated}'
+  ) then raise exception 'owner-only audit policy missing'; end if;
+  if not exists(
+    select 1 from pg_policies
+    where schemaname='storage' and tablename='objects'
+      and policyname='org files update' and roles='{authenticated}'
+  ) then raise exception 'document upsert policy missing'; end if;
+  if position('''hr''' in pg_get_functiondef('public.can_manage_org(uuid)'::regprocedure))>0 then
+    raise exception 'HR must not have broad organization management';
+  end if;
+  if position('audit.view' in pg_get_functiondef('public.has_permission(uuid,text)'::regprocedure))>0 then
+    raise exception 'audit access must remain owner/platform-admin only';
+  end if;
 end $$;
 
 -- Authenticated behavioral test matrix (run through Supabase client/JWT):
