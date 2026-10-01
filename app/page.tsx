@@ -7,6 +7,7 @@ import type { UserNotification } from "@/components/notification-center";
 import { normalizePermissions, sectionKeys, type SectionKey } from "@/lib/access";
 import { createClient } from "@/lib/supabase/server";
 import { PasswordChangeScreen } from "@/components/password-change-screen";
+import type { SafetyIncident, SafetyLocation } from "@/components/safety-records";
 
 export const dynamic = "force-dynamic";
 type MembershipRow = {
@@ -54,12 +55,12 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
   const permissions=isPlatformAdmin||role==="owner"?[...sectionKeys]:normalizePermissions(role,membership?.section_permissions);
   const canAudit=isPlatformAdmin||role==="owner";
   const requested=params.section as Tab|undefined;
-  const activeSection:Tab=requested==="admin"&&isPlatformAdmin?"admin":requested==="audit"&&!canAudit?"overview":requested&&sectionKeys.includes(requested as SectionKey)&&permissions.includes(requested as SectionKey)?requested:"overview";
+  const activeSection:Tab=requested==="admin"&&isPlatformAdmin?"admin":requested==="control"&&["tasks","incidents","vision"].some(key=>permissions.includes(key as SectionKey))?"control":requested==="audit"&&!canAudit?"overview":requested&&sectionKeys.includes(requested as SectionKey)&&permissions.includes(requested as SectionKey)?requested:"overview";
   const overview=activeSection==="overview";
   const needEmployees=overview||["employees","tmc","learning","billing"].includes(activeSection);
-  const needMembers=overview||["tasks","team","audit","admin"].includes(activeSection);
+  const needMembers=overview||["tasks","team","audit","admin","incidents","locations"].includes(activeSection);
   const needLearning=overview||activeSection==="learning";
-  const needVision=overview||activeSection==="vision";
+  const needVision=overview||["vision","control"].includes(activeSection);
   const needPayments=["billing","admin"].includes(activeSection);
   // The operational centre only needs deadline data. Loading full employee,
   // inventory, document, task and camera records here was inflating the SSR
@@ -68,14 +69,14 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
   const inventoryColumns=activeSection==="tmc"?"*":activeSection==="billing"?"id":"id,name,category,next_service_date";
   const ppeColumns=activeSection==="tmc"?"*":activeSection==="billing"?"id":"id,item_name,replacement_date";
   const documentColumns=activeSection==="documents"?"*":activeSection==="billing"?"id":"id,name,review_date,expires_at,is_perpetual";
-  const taskColumns=activeSection==="tasks"?"*":"id,title,description,priority,status,assignee_id,due_date";
+  const taskColumns=["tasks","incidents"].includes(activeSection)?"*":"id,title,description,priority,status,assignee_id,due_date,source_type,source_id";
 
-  const [employees,inventory,ppe,documents,tasks,taskEvidence,members,audit,paymentRequests,adminOrganizations,courses,questions,attempts,assignments,cameras,visionEvents,jobProfiles,notifications,trainingTypes,documentCategories]=await Promise.all([
+  const [employees,inventory,ppe,documents,tasks,taskEvidence,members,audit,paymentRequests,adminOrganizations,courses,questions,attempts,assignments,cameras,visionEvents,jobProfiles,notifications,trainingTypes,documentCategories,locations,incidents,locationInventory,locationIncidentCounts]=await Promise.all([
     needEmployees?supabase.from("employees").select(employeeColumns).eq("organization_id",selected.id).is("archived_at",null).order("full_name"):empty(),
     overview||activeSection==="tmc"||activeSection==="billing"?supabase.from("inventory").select(inventoryColumns).eq("organization_id",selected.id).is("archived_at",null).order("name"):empty(),
     overview||activeSection==="tmc"||activeSection==="billing"?supabase.from("ppe_issues").select(ppeColumns).eq("organization_id",selected.id).is("archived_at",null).order("replacement_date"):empty(),
     overview||activeSection==="documents"||activeSection==="billing"?supabase.from("documents").select(documentColumns).eq("organization_id",selected.id).is("archived_at",null).order("created_at",{ascending:false}):empty(),
-    overview||activeSection==="tasks"?supabase.from("tasks").select(taskColumns).eq("organization_id",selected.id).is("archived_at",null).order("due_date"):empty(),
+    overview||["tasks","incidents","control"].includes(activeSection)?supabase.from("tasks").select(taskColumns).eq("organization_id",selected.id).is("archived_at",null).order("due_date"):empty(),
     activeSection==="tasks"?supabase.from("evidence").select("id,task_id,evidence_type,note,captured_at,captured_by,verified_at,verified_by").eq("organization_id",selected.id).not("task_id","is",null).order("captured_at",{ascending:false}):empty(),
     needMembers?supabase.from("memberships").select("organization_id,user_id,role,section_permissions,is_active,created_at").eq("organization_id",selected.id).order("created_at"):empty(),
     activeSection==="audit"&&canAudit?supabase.from("audit_events").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}).limit(200):empty(),
@@ -93,6 +94,10 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
     empty(),
     activeSection==="learning"?supabase.from("training_types").select("id,name,format,is_active").eq("organization_id",selected.id).order("name"):empty(),
     activeSection==="documents"?supabase.from("document_categories").select("id,name,is_active").eq("organization_id",selected.id).order("name"):empty(),
+    ["locations","incidents","tmc"].includes(activeSection)?supabase.from("safety_locations").select("id,organization_id,parent_id,kind,name,address,description,responsible_id,archived_at").eq("organization_id",selected.id).is("archived_at",null).order("name"):empty(),
+    ["incidents","locations","control"].includes(activeSection)?supabase.from("safety_incidents").select("*").eq("organization_id",selected.id).is("archived_at",null).order("occurred_at",{ascending:false}).limit(200):empty(),
+    activeSection==="locations"?supabase.from("inventory").select("id,location_id").eq("organization_id",selected.id).is("archived_at",null).not("location_id","is",null):empty(),
+    activeSection==="locations"?supabase.from("safety_incidents").select("id,location_id").eq("organization_id",selected.id).is("archived_at",null).not("location_id","is",null):empty(),
   ]);
 
   const memberRows=(members.data||[]) as TeamMember[];
@@ -123,5 +128,8 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
     visionCameras={(cameras.data||[]) as VisionCamera[]} visionEvents={(visionEvents.data||[]) as VisionEvent[]}
     jobProfiles={(jobProfiles.data||[]) as JobProfile[]} notifications={(notifications.data||[]) as UserNotification[]}
     trainingTypes={trainingTypes.data||[]} documentCategories={documentCategories.data||[]}
+    safetyLocations={(locations.data||[]) as SafetyLocation[]} safetyIncidents={(incidents.data||[]) as SafetyIncident[]}
+    locationInventoryCounts={(locationInventory.data||[]).reduce<Record<string,number>>((result,item)=>{if(item.location_id)result[item.location_id]=(result[item.location_id]||0)+1;return result},{})}
+    locationIncidentCounts={(locationIncidentCounts.data||[]).reduce<Record<string,number>>((result,item)=>{if(item.location_id)result[item.location_id]=(result[item.location_id]||0)+1;return result},{})}
     initialData={{employees:(employees.data||[]) as unknown as DashboardRow[],inventory:(inventory.data||[]) as unknown as DashboardRow[],ppe:(ppe.data||[]) as unknown as DashboardRow[],documents:(documents.data||[]) as unknown as DashboardRow[]}}/>;
 }

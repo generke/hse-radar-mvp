@@ -3,18 +3,18 @@ import { hasPermission, isRole, permissions, rolePermissions, roles, type Permis
 export { hasPermission, isRole, permissions, rolePermissions, roles };
 export type { Permission, Role };
 
-export const sectionKeys=["overview","employees","positions","tmc","documents","tasks","learning","vision","team","audit","billing"] as const;
+export const sectionKeys=["overview","employees","positions","tmc","locations","documents","tasks","incidents","learning","vision","team","audit","billing"] as const;
 export type SectionKey=typeof sectionKeys[number];
 
 export const sectionLabels:Record<SectionKey,string>={
   overview:"Оперативный центр",employees:"Работники",positions:"Должности",tmc:"ТМЦ",
-  documents:"Документы",tasks:"Задачи",learning:"Обучение",vision:"Safety Vision",
+  locations:"Объекты",documents:"Документы",tasks:"Задачи",incidents:"Инциденты",learning:"Обучение",vision:"Safety Vision",
   team:"Руководители",audit:"Журнал действий",billing:"Тариф и оплата"
 };
 
 export const rolePermissionPresets:Record<string,SectionKey[]>={
   owner:[...sectionKeys],
-  hse:["overview","employees","positions","tmc","documents","tasks","learning","vision"],
+  hse:["overview","employees","positions","tmc","locations","documents","tasks","incidents","learning","vision"],
   hr:["overview","employees","documents","learning"],
   manager:["overview","employees","tasks","learning","vision"],
   member:["overview","tasks","learning"],
