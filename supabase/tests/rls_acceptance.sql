@@ -31,6 +31,9 @@ begin
   if position('audit.view' in pg_get_functiondef('public.has_permission(uuid,text)'::regprocedure))>0 then
     raise exception 'audit access must remain owner/platform-admin only';
   end if;
+  if position('role in (''hse'',''manager'',''hr'')' in pg_get_functiondef('public.can_manage_section(uuid,text)'::regprocedure))>0 then
+    raise exception 'section management must not grant HR broad write access';
+  end if;
   if not exists(select 1 from pg_trigger where tgrelid='public.tasks'::regclass and tgname='tasks_transition_guard' and not tgisinternal) then
     raise exception 'task transition guard missing';
   end if;
