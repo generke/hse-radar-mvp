@@ -31,6 +31,17 @@ begin
   if position('audit.view' in pg_get_functiondef('public.has_permission(uuid,text)'::regprocedure))>0 then
     raise exception 'audit access must remain owner/platform-admin only';
   end if;
+  if not exists(select 1 from pg_trigger where tgrelid='public.tasks'::regclass and tgname='tasks_transition_guard' and not tgisinternal) then
+    raise exception 'task transition guard missing';
+  end if;
+  if not exists(select 1 from information_schema.columns where table_schema='public' and table_name='tasks' and column_name='completed_by')
+     or not exists(select 1 from information_schema.columns where table_schema='public' and table_name='tasks' and column_name='verified_by') then
+    raise exception 'task closure actors missing';
+  end if;
+  if position('EVIDENCE_REQUIRED' in pg_get_functiondef('public.guard_task_transition()'::regprocedure))=0
+     or position('SECOND_PERSON_REQUIRED' in pg_get_functiondef('public.guard_task_transition()'::regprocedure))=0 then
+    raise exception 'task closure controls missing';
+  end if;
 end $$;
 
 -- Authenticated behavioral test matrix (run through Supabase client/JWT):

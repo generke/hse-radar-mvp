@@ -1,6 +1,6 @@
 import { AuthScreen } from "@/components/auth-screen";
 import { Dashboard, type AdminAccessUser, type Tab } from "@/components/dashboard";
-import type { AuditEvent, TaskItem, TeamMember } from "@/components/product-panels";
+import type { AuditEvent, TaskEvidence, TaskItem, TeamMember } from "@/components/product-panels";
 import type { LearningAssignment, LearningAttempt, LearningCourse, VisionCamera, VisionEvent } from "@/components/module-panels";
 import type { JobProfile } from "@/components/positions-panel";
 import type { UserNotification } from "@/components/notification-center";
@@ -70,12 +70,13 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
   const documentColumns=activeSection==="documents"?"*":activeSection==="billing"?"id":"id,name,review_date,expires_at,is_perpetual";
   const taskColumns=activeSection==="tasks"?"*":"id,title,description,priority,status,assignee_id,due_date";
 
-  const [employees,inventory,ppe,documents,tasks,members,audit,paymentRequests,adminOrganizations,courses,questions,attempts,assignments,cameras,visionEvents,jobProfiles,notifications,trainingTypes,documentCategories]=await Promise.all([
+  const [employees,inventory,ppe,documents,tasks,taskEvidence,members,audit,paymentRequests,adminOrganizations,courses,questions,attempts,assignments,cameras,visionEvents,jobProfiles,notifications,trainingTypes,documentCategories]=await Promise.all([
     needEmployees?supabase.from("employees").select(employeeColumns).eq("organization_id",selected.id).is("archived_at",null).order("full_name"):empty(),
     overview||activeSection==="tmc"||activeSection==="billing"?supabase.from("inventory").select(inventoryColumns).eq("organization_id",selected.id).is("archived_at",null).order("name"):empty(),
     overview||activeSection==="tmc"||activeSection==="billing"?supabase.from("ppe_issues").select(ppeColumns).eq("organization_id",selected.id).is("archived_at",null).order("replacement_date"):empty(),
     overview||activeSection==="documents"||activeSection==="billing"?supabase.from("documents").select(documentColumns).eq("organization_id",selected.id).is("archived_at",null).order("created_at",{ascending:false}):empty(),
     overview||activeSection==="tasks"?supabase.from("tasks").select(taskColumns).eq("organization_id",selected.id).is("archived_at",null).order("due_date"):empty(),
+    activeSection==="tasks"?supabase.from("evidence").select("id,task_id,evidence_type,note,captured_at,captured_by,verified_at,verified_by").eq("organization_id",selected.id).not("task_id","is",null).order("captured_at",{ascending:false}):empty(),
     needMembers?supabase.from("memberships").select("organization_id,user_id,role,section_permissions,is_active,created_at").eq("organization_id",selected.id).order("created_at"):empty(),
     activeSection==="audit"&&canAudit?supabase.from("audit_events").select("*").eq("organization_id",selected.id).order("created_at",{ascending:false}).limit(200):empty(),
     needPayments?supabase.from("payment_requests").select("id,organization_id,payment_reference,status,created_at,amount,billing_months,organizations(name,plan,subscription_status)").order("created_at",{ascending:false}).limit(isPlatformAdmin?100:10):empty(),
@@ -117,7 +118,7 @@ export default async function Home({searchParams}:{searchParams:Promise<SearchPa
     isPlatformAdmin={isPlatformAdmin} workspaces={workspaces} sectionPermissions={permissions}
     kaspiPayUrl={process.env.NEXT_PUBLIC_KASPI_PAY_URL||""}
     paymentRequests={paymentRequests.data||[]} adminOrganizations={adminOrganizations.data||[]} adminAccessUsers={adminAccessUsers}
-    tasks={(tasks.data||[]) as unknown as TaskItem[]} members={team} auditEvents={(audit.data||[]) as AuditEvent[]}
+    tasks={(tasks.data||[]) as unknown as TaskItem[]} taskEvidence={(taskEvidence.data||[]) as TaskEvidence[]} members={team} auditEvents={(audit.data||[]) as AuditEvent[]}
     learningCourses={learningCourses} learningAttempts={(attempts.data||[]) as LearningAttempt[]} learningAssignments={learningAssignments}
     visionCameras={(cameras.data||[]) as VisionCamera[]} visionEvents={(visionEvents.data||[]) as VisionEvent[]}
     jobProfiles={(jobProfiles.data||[]) as JobProfile[]} notifications={(notifications.data||[]) as UserNotification[]}
