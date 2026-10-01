@@ -4,7 +4,8 @@ import { FormEvent, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { rolePermissionPresets, sectionKeys, sectionLabels, type SectionKey } from "@/lib/access";
 
-export type TaskItem = { id:string; title:string; description?:string|null; priority:string; status:string; assignee_id?:string|null; due_date:string; created_by?:string|null; created_at:string };
+export type TaskItem = { id:string; title:string; description?:string|null; priority:string; status:string; assignee_id?:string|null; due_date:string; created_by?:string|null; completed_by?:string|null; verified_by?:string|null; completed_at?:string|null; verified_at?:string|null; created_at:string };
+export type TaskEvidence = { id:string; task_id:string; evidence_type:string; note?:string|null; captured_at:string; captured_by?:string|null; verified_at?:string|null; verified_by?:string|null };
 export type TeamMember = { user_id:string; role:string; created_at:string; full_name?:string|null; email?:string|null; section_permissions?:SectionKey[]; is_active?:boolean };
 export type AuditEvent = { id:string; actor_id?:string|null; action:string; entity_type:string; entity_id?:string|null; created_at:string; before_data?:Record<string,unknown>|null; after_data?:Record<string,unknown>|null };
 
